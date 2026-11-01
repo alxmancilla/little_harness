@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Harness runtime output
+trace.jsonl
+*.json
+*.json.tmp
+workspace/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
