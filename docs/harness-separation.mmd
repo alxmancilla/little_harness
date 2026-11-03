@@ -1,0 +1,19 @@
+flowchart TB
+    New["examples/inventory_agent: independent application"] --> Core["harness.Agent + ToolRegistry"]
+    Teaching["agents/teaching: configuration, tools, demos, CLI"] --> Core
+    Single["agents/hotpotqa/single"] --> Common["agents/hotpotqa/common: config, tools, accounting"]
+    Multi["agents/hotpotqa/multi: researcher/reviewer workflow"] --> Common
+    Common --> Core
+    Common -->|"explicit tool bindings"| Teaching
+    Eval["evaluation/hotpotqa: host, scoring, frozen inputs"] --> Single
+    Eval --> Multi
+    Eval --> Prediction["agents/hotpotqa/prediction: label-free contract"]
+    Single --> Prediction
+    Multi --> Prediction
+    Core --> Leaves["harness/: models, limits, policies, events, journal, workers"]
+    Recovery["Package journal inspection / human recovery command"] --> Leaves
+    Core --> State[("Sessions / traces / optional journal")]
+    Eval -. "fingerprints full runtime boundary" .-> Core
+    Eval -. "fingerprints" .-> Leaves
+    Eval -. "fingerprints application dependencies" .-> Common
+    Eval -. "fingerprints reused tool implementations" .-> Teaching

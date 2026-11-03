@@ -1,0 +1,515 @@
+{
+  "dataset": "HotpotQA",
+  "config": "distractor",
+  "split": "validation",
+  "homepage": "https://hotpotqa.github.io/",
+  "source_url": "https://datasets-server.huggingface.co/first-rows?dataset=hotpotqa/hotpot_qa&config=distractor&split=validation",
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "selection": "first five bridge and first five comparison records, in source order",
+  "question_count": 10,
+  "document_count": 100,
+  "snapshot_sha256": "d8f1256f85d35ba307e4d652ce0cafd049ab4b21d217346dabab320cec9e8619",
+  "documents": {
+    "q01-p01.txt": {
+      "title": "Ed Wood (film)",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 3
+    },
+    "q01-p02.txt": {
+      "title": "Scott Derrickson",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 3
+    },
+    "q01-p03.txt": {
+      "title": "Woodson, Arkansas",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 5
+    },
+    "q01-p04.txt": {
+      "title": "Tyler Bates",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 5
+    },
+    "q01-p05.txt": {
+      "title": "Ed Wood",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 1
+    },
+    "q01-p06.txt": {
+      "title": "Deliver Us from Evil (2014 film)",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 3
+    },
+    "q01-p07.txt": {
+      "title": "Adam Collis",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 5
+    },
+    "q01-p08.txt": {
+      "title": "Sinister (film)",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 2
+    },
+    "q01-p09.txt": {
+      "title": "Conrad Brooks",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 5
+    },
+    "q01-p10.txt": {
+      "title": "Doctor Strange (2016 film)",
+      "question_id": "5a8b57f25542995d1e6f1371",
+      "sentences": 4
+    },
+    "q02-p01.txt": {
+      "title": "Meet Corliss Archer",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 4
+    },
+    "q02-p02.txt": {
+      "title": "Shirley Temple",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 2
+    },
+    "q02-p03.txt": {
+      "title": "Janet Waldo",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 2
+    },
+    "q02-p04.txt": {
+      "title": "Meet Corliss Archer (TV series)",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 2
+    },
+    "q02-p05.txt": {
+      "title": "Lord High Treasurer",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 2
+    },
+    "q02-p06.txt": {
+      "title": "A Kiss for Corliss",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 5
+    },
+    "q02-p07.txt": {
+      "title": "Kiss and Tell (1945 film)",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 3
+    },
+    "q02-p08.txt": {
+      "title": "Secretary of State for Constitutional Affairs",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 3
+    },
+    "q02-p09.txt": {
+      "title": "Village accountant",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 5
+    },
+    "q02-p10.txt": {
+      "title": "Charles Craft",
+      "question_id": "5a8c7595554299585d9e36b6",
+      "sentences": 10
+    },
+    "q03-p01.txt": {
+      "title": "Andre Norton Award",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 5
+    },
+    "q03-p02.txt": {
+      "title": "Victoria Hanley",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 4
+    },
+    "q03-p03.txt": {
+      "title": "The Hork-Bajir Chronicles",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 4
+    },
+    "q03-p04.txt": {
+      "title": "Shadowshaper",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 4
+    },
+    "q03-p05.txt": {
+      "title": "Left Behind: The Kids",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 5
+    },
+    "q03-p06.txt": {
+      "title": "List of Square Enix companion books",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 6
+    },
+    "q03-p07.txt": {
+      "title": "The Divide trilogy",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 5
+    },
+    "q03-p08.txt": {
+      "title": "Science Fantasy (magazine)",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 6
+    },
+    "q03-p09.txt": {
+      "title": "Animorphs",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 3
+    },
+    "q03-p10.txt": {
+      "title": "Etiquette &amp; Espionage",
+      "question_id": "5a85ea095542994775f606a8",
+      "sentences": 2
+    },
+    "q04-p01.txt": {
+      "title": "Esma Sultan (daughter of Abdülaziz)",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 2
+    },
+    "q04-p02.txt": {
+      "title": "Djamaâ el Kebir",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 9
+    },
+    "q04-p03.txt": {
+      "title": "Küçük Hüseyin Pasha",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 2
+    },
+    "q04-p04.txt": {
+      "title": "Esma Sultan (daughter of Abdul Hamid I)",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 2
+    },
+    "q04-p05.txt": {
+      "title": "Sultan Ahmed Mosque",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 6
+    },
+    "q04-p06.txt": {
+      "title": "Laleli Mosque",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 1
+    },
+    "q04-p07.txt": {
+      "title": "Esma Sultan Mansion",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 1
+    },
+    "q04-p08.txt": {
+      "title": "Esma Sultan",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 1
+    },
+    "q04-p09.txt": {
+      "title": "Gevheri Kadın",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 2
+    },
+    "q04-p10.txt": {
+      "title": "Esma Sultan (daughter of Ahmed III)",
+      "question_id": "5adbf0a255429947ff17385a",
+      "sentences": 2
+    },
+    "q05-p01.txt": {
+      "title": "Just Another Romantic Wrestling Comedy",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 4
+    },
+    "q05-p02.txt": {
+      "title": "Kingston Morning",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 2
+    },
+    "q05-p03.txt": {
+      "title": "Nola (film)",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 3
+    },
+    "q05-p04.txt": {
+      "title": "Adriana Trigiani",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 2
+    },
+    "q05-p05.txt": {
+      "title": "Great Eastern Conventions",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 4
+    },
+    "q05-p06.txt": {
+      "title": "New York Society of Model Engineers",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 22
+    },
+    "q05-p07.txt": {
+      "title": "Clinton, Minnesota",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 3
+    },
+    "q05-p08.txt": {
+      "title": "Hamish and Andy's Gap Year",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 4
+    },
+    "q05-p09.txt": {
+      "title": "I Love NY (2015 film)",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 5
+    },
+    "q05-p10.txt": {
+      "title": "Big Stone Gap (film)",
+      "question_id": "5a8e3ea95542995a26add48d",
+      "sentences": 3
+    },
+    "q06-p01.txt": {
+      "title": "List of awards and nominations received by Shinee",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 8
+    },
+    "q06-p02.txt": {
+      "title": "Cho Kyuhyun",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 3
+    },
+    "q06-p03.txt": {
+      "title": "2014 S/S",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 3
+    },
+    "q06-p04.txt": {
+      "title": "History (band)",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 4
+    },
+    "q06-p05.txt": {
+      "title": "Winner (band)",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 3
+    },
+    "q06-p06.txt": {
+      "title": "Madtown",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 6
+    },
+    "q06-p07.txt": {
+      "title": "List of songs written by Ravi",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 5
+    },
+    "q06-p08.txt": {
+      "title": "SF9 (band)",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 3
+    },
+    "q06-p09.txt": {
+      "title": "Seventeen discography",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 3
+    },
+    "q06-p10.txt": {
+      "title": "BTS discography",
+      "question_id": "5abd94525542992ac4f382d2",
+      "sentences": 7
+    },
+    "q07-p01.txt": {
+      "title": "James P. Comer",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 10
+    },
+    "q07-p02.txt": {
+      "title": "Method Man",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 5
+    },
+    "q07-p03.txt": {
+      "title": "Indriati Iskak",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 5
+    },
+    "q07-p04.txt": {
+      "title": "Eenasul Fateh",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 1
+    },
+    "q07-p05.txt": {
+      "title": "Mick (DJ)",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 4
+    },
+    "q07-p06.txt": {
+      "title": "Criss Angel",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 5
+    },
+    "q07-p07.txt": {
+      "title": "ELDee",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 4
+    },
+    "q07-p08.txt": {
+      "title": "Management consulting",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 2
+    },
+    "q07-p09.txt": {
+      "title": "Lil Ru",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 9
+    },
+    "q07-p10.txt": {
+      "title": "Amaruk Kayshapanta",
+      "question_id": "5a85b2d95542997b5ce40028",
+      "sentences": 7
+    },
+    "q08-p01.txt": {
+      "title": "Mendocino County GMO Ban",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 6
+    },
+    "q08-p02.txt": {
+      "title": "United States Senate election in Illinois, 1978",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 6
+    },
+    "q08-p03.txt": {
+      "title": "William H. Cook Water Tank House",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 4
+    },
+    "q08-p04.txt": {
+      "title": "Amherst, Massachusetts",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 4
+    },
+    "q08-p05.txt": {
+      "title": "Local H",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 2
+    },
+    "q08-p06.txt": {
+      "title": "Wilford H. Fawcett House",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 8
+    },
+    "q08-p07.txt": {
+      "title": "For Against",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 2
+    },
+    "q08-p08.txt": {
+      "title": "Ophur",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 3
+    },
+    "q08-p09.txt": {
+      "title": "Suffrajett",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 4
+    },
+    "q08-p10.txt": {
+      "title": "Hallelujah! I'm a Bum (album)",
+      "question_id": "5a8db19d5542994ba4e3dd00",
+      "sentences": 5
+    },
+    "q09-p01.txt": {
+      "title": "Real estate benchmarking",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 3
+    },
+    "q09-p02.txt": {
+      "title": "Hounsfield Heights/Briar Hill, Calgary",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 4
+    },
+    "q09-p03.txt": {
+      "title": "Villard (imprint)",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 4
+    },
+    "q09-p04.txt": {
+      "title": "888 7th Avenue",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 5
+    },
+    "q09-p05.txt": {
+      "title": "Random House Tower",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 2
+    },
+    "q09-p06.txt": {
+      "title": "Pershing Square Capital Management",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 1
+    },
+    "q09-p07.txt": {
+      "title": "Carl B. Stokes United States Courthouse",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 4
+    },
+    "q09-p08.txt": {
+      "title": "Real estate technology",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 5
+    },
+    "q09-p09.txt": {
+      "title": "Loan modification in the United States",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 32
+    },
+    "q09-p10.txt": {
+      "title": "South Phoenix",
+      "question_id": "5ab56e32554299637185c594",
+      "sentences": 5
+    },
+    "q10-p01.txt": {
+      "title": "Bernhard Bötel",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 4
+    },
+    "q10-p02.txt": {
+      "title": "Giuseppe Verdi (film)",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 5
+    },
+    "q10-p03.txt": {
+      "title": "Parma Airport",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 3
+    },
+    "q10-p04.txt": {
+      "title": "Giuseppe Verdi",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 1
+    },
+    "q10-p05.txt": {
+      "title": "Teatro Giuseppe Verdi",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 3
+    },
+    "q10-p06.txt": {
+      "title": "Ambroise Thomas",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 1
+    },
+    "q10-p07.txt": {
+      "title": "Armand Castelmary",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 3
+    },
+    "q10-p08.txt": {
+      "title": "Ferdinando Provesi",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 5
+    },
+    "q10-p09.txt": {
+      "title": "List of major opera composers",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 7
+    },
+    "q10-p10.txt": {
+      "title": "Verdi, the King of Melody",
+      "question_id": "5ab29c24554299449642c932",
+      "sentences": 3
+    }
+  }
+}

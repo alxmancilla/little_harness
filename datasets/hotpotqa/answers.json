@@ -1,0 +1,202 @@
+[
+  {
+    "id": "5a8b57f25542995d1e6f1371",
+    "answer": "yes",
+    "type": "comparison",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q01-p02.txt",
+        "title": "Scott Derrickson",
+        "sentence": 0
+      },
+      {
+        "document": "q01-p05.txt",
+        "title": "Ed Wood",
+        "sentence": 0
+      }
+    ]
+  },
+  {
+    "id": "5a8c7595554299585d9e36b6",
+    "answer": "Chief of Protocol",
+    "type": "bridge",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q02-p07.txt",
+        "title": "Kiss and Tell (1945 film)",
+        "sentence": 0
+      },
+      {
+        "document": "q02-p02.txt",
+        "title": "Shirley Temple",
+        "sentence": 0
+      },
+      {
+        "document": "q02-p02.txt",
+        "title": "Shirley Temple",
+        "sentence": 1
+      }
+    ]
+  },
+  {
+    "id": "5a85ea095542994775f606a8",
+    "answer": "Animorphs",
+    "type": "bridge",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q03-p03.txt",
+        "title": "The Hork-Bajir Chronicles",
+        "sentence": 0
+      },
+      {
+        "document": "q03-p03.txt",
+        "title": "The Hork-Bajir Chronicles",
+        "sentence": 1
+      },
+      {
+        "document": "q03-p03.txt",
+        "title": "The Hork-Bajir Chronicles",
+        "sentence": 2
+      },
+      {
+        "document": "q03-p09.txt",
+        "title": "Animorphs",
+        "sentence": 0
+      },
+      {
+        "document": "q03-p09.txt",
+        "title": "Animorphs",
+        "sentence": 1
+      }
+    ]
+  },
+  {
+    "id": "5adbf0a255429947ff17385a",
+    "answer": "no",
+    "type": "comparison",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q04-p06.txt",
+        "title": "Laleli Mosque",
+        "sentence": 0
+      },
+      {
+        "document": "q04-p07.txt",
+        "title": "Esma Sultan Mansion",
+        "sentence": 0
+      }
+    ]
+  },
+  {
+    "id": "5a8e3ea95542995a26add48d",
+    "answer": "Greenwich Village, New York City",
+    "type": "bridge",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q05-p10.txt",
+        "title": "Big Stone Gap (film)",
+        "sentence": 0
+      },
+      {
+        "document": "q05-p04.txt",
+        "title": "Adriana Trigiani",
+        "sentence": 0
+      }
+    ]
+  },
+  {
+    "id": "5abd94525542992ac4f382d2",
+    "answer": "YG Entertainment",
+    "type": "bridge",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q06-p03.txt",
+        "title": "2014 S/S",
+        "sentence": 0
+      },
+      {
+        "document": "q06-p05.txt",
+        "title": "Winner (band)",
+        "sentence": 0
+      }
+    ]
+  },
+  {
+    "id": "5a85b2d95542997b5ce40028",
+    "answer": "Eenasul Fateh",
+    "type": "bridge",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q07-p04.txt",
+        "title": "Eenasul Fateh",
+        "sentence": 0
+      },
+      {
+        "document": "q07-p08.txt",
+        "title": "Management consulting",
+        "sentence": 0
+      }
+    ]
+  },
+  {
+    "id": "5a8db19d5542994ba4e3dd00",
+    "answer": "yes",
+    "type": "comparison",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q08-p05.txt",
+        "title": "Local H",
+        "sentence": 0
+      },
+      {
+        "document": "q08-p07.txt",
+        "title": "For Against",
+        "sentence": 0
+      }
+    ]
+  },
+  {
+    "id": "5ab56e32554299637185c594",
+    "answer": "no",
+    "type": "comparison",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q09-p05.txt",
+        "title": "Random House Tower",
+        "sentence": 0
+      },
+      {
+        "document": "q09-p04.txt",
+        "title": "888 7th Avenue",
+        "sentence": 2
+      }
+    ]
+  },
+  {
+    "id": "5ab29c24554299449642c932",
+    "answer": "yes",
+    "type": "comparison",
+    "level": "hard",
+    "supporting_facts": [
+      {
+        "document": "q10-p04.txt",
+        "title": "Giuseppe Verdi",
+        "sentence": 0
+      },
+      {
+        "document": "q10-p06.txt",
+        "title": "Ambroise Thomas",
+        "sentence": 0
+      }
+    ]
+  }
+]

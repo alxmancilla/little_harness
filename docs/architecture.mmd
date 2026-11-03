@@ -1,0 +1,44 @@
+flowchart LR
+    subgraph parent["Trusted application - Python parent process"]
+        app["Embedding application / examples/inventory_agent"] --> agent["Agent - harness/agent.py"]
+        teaching["agents.teaching.cli / explicit application factory"] --> agent
+        agent --> budget["ExecutionBudget and RunResult - harness/runtime.py"]
+        registry["ToolRegistry and schemas - harness/tools.py"] --> agent
+        agent --> clients["Model adapters and HTTP/SSE - harness/model_clients.py"]
+        agent -->|"offline alternative"| scripted["ScriptedModel - no HTTP"]
+        agent --> gates["Agent._run_tool - allowlist, admission, validation, policy, approval"]
+        registry --> gates
+        policy["ToolPolicy - harness/policy.py"] -.-> gates
+        approval["Human or application approval"] -.-> gates
+        agent --> journal["ExecutionJournal - harness/journal.py"]
+        gates -->|"optional durable start before invocation"| journal
+        gates --> invoke["Agent._invoke_tool"]
+        invoke -->|"default"| inline["Registered function - inline"]
+        agent -.-> events["RunEvent callback - harness/events.py"]
+    end
+
+    clients <-->|"requests and streamed responses"| provider["External model API or local server"]
+
+    subgraph child["Optional disposable child process - NOT a security sandbox"]
+        worker["Imported tool / JSON-bound partial - harness/tool_execution.py"]
+    end
+    invoke -->|"timeout configured - JSON over stdin"| worker
+    worker -->|"outcome - no parent-memory mutation"| invoke
+
+    subgraph storage["Local artifacts - distinct responsibilities"]
+        session[("Optional session JSON - conversation")]
+        trace[("JSONL trace - content-rich diagnostics")]
+        sqlite[("Optional SQLite journal - action metadata")]
+    end
+    agent --> session
+    agent --> trace
+    journal --> sqlite
+    recovery["Human recovery CLI - inspect and resolve, never replay"] --> journal
+
+    subgraph access["Tool-accessible resources - governed by tool code and OS permissions"]
+        workspace["Workspace files"]
+        knowledge["Curated knowledge documents"]
+        network["Network or other external systems"]
+    end
+    inline --> workspace & knowledge & network
+    worker --> workspace & knowledge & network

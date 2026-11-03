@@ -1,0 +1,1 @@
+"""Offline regression suite. Run from the repository root with python3 -m unittest."""

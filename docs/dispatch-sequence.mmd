@@ -1,0 +1,67 @@
+sequenceDiagram
+    autonumber
+    actor Caller
+    participant Agent as Agent - parent process
+    participant Budget as ExecutionBudget
+    participant Model as Model callable
+    participant Policy as ToolPolicy - optional
+    participant Approval as Approval callback
+    participant Journal as SQLite journal - optional
+    participant Tool as Inline function or isolated worker
+    participant Session as Session JSON - optional
+
+    Caller->>Agent: run_result(task)
+    Agent->>Budget: Create fresh counters and deadline
+    opt Journal enabled
+        Agent->>Journal: assert_ready()
+        Journal-->>Agent: Ready or recovery/error stop before model work
+    end
+    Note over Agent,Session: Add task and save conversation only after recovery permits it
+    loop Main step - until final answer or stop
+        opt History needs compaction
+            Agent->>Budget: Admit summary call against shared limits
+            Agent->>Model: Summarize old history with no tools
+            Model-->>Agent: Summary and optional usage
+        end
+        Agent->>Budget: Admit main model call
+        Agent->>Model: System, history, allowed schemas, text callback
+        Model-->>Agent: Normalized content, stop reason and optional usage
+        Agent->>Budget: Record usage
+        alt Response contains tool requests
+            loop Requests in response order
+                Agent->>Budget: Admit non-truncated attempt
+                Note over Agent: Allowlist lookup, optional application admission, primitive validation
+                opt Policy configured
+                    Agent->>Policy: Read-only gate and detached argument predicate
+                    Policy-->>Agent: Allow, deny or policy error
+                end
+                opt Validated, policy-permitted risky request
+                    Agent->>Approval: Decide using arguments
+                    Approval-->>Agent: Allow or deny
+                end
+                alt Permitted and budget still available
+                    Agent->>Budget: Recheck cooperative limits
+                    opt Journal enabled
+                        Agent->>Journal: Commit started action before invocation
+                    end
+                    Agent->>Tool: Invoke once after start notification and limit recheck
+                    Tool-->>Agent: Known result or timeout/uncertain outcome
+                    opt Journal enabled
+                        Agent->>Journal: Commit outcome
+                    end
+                else Denied, invalid or truncated
+                    Note over Agent,Tool: Not-run error; no invocation or journal action
+                end
+                Note over Agent: Preserve each obtained result before finish notification
+            end
+            Agent->>Session: Save complete tool-result batch
+        else No tool requests
+            Agent->>Session: Save final response
+        end
+    end
+    Note over Agent,Tool: A terminal batch stop pairs remaining calls as not run; no automatic retry
+    opt Journal permits normal finalization
+        Agent->>Journal: Close run after session persistence
+    end
+    Agent-->>Caller: Immutable RunResult
+    Note over Caller,Agent: Events observe lifecycle synchronously; traces are separate from sessions/journal

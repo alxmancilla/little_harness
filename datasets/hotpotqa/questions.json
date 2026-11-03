@@ -1,0 +1,162 @@
+[
+  {
+    "id": "5a8b57f25542995d1e6f1371",
+    "question": "Were Scott Derrickson and Ed Wood of the same nationality?",
+    "candidates": [
+      "q01-p01.txt",
+      "q01-p02.txt",
+      "q01-p03.txt",
+      "q01-p04.txt",
+      "q01-p05.txt",
+      "q01-p06.txt",
+      "q01-p07.txt",
+      "q01-p08.txt",
+      "q01-p09.txt",
+      "q01-p10.txt"
+    ]
+  },
+  {
+    "id": "5a8c7595554299585d9e36b6",
+    "question": "What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?",
+    "candidates": [
+      "q02-p01.txt",
+      "q02-p02.txt",
+      "q02-p03.txt",
+      "q02-p04.txt",
+      "q02-p05.txt",
+      "q02-p06.txt",
+      "q02-p07.txt",
+      "q02-p08.txt",
+      "q02-p09.txt",
+      "q02-p10.txt"
+    ]
+  },
+  {
+    "id": "5a85ea095542994775f606a8",
+    "question": "What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?",
+    "candidates": [
+      "q03-p01.txt",
+      "q03-p02.txt",
+      "q03-p03.txt",
+      "q03-p04.txt",
+      "q03-p05.txt",
+      "q03-p06.txt",
+      "q03-p07.txt",
+      "q03-p08.txt",
+      "q03-p09.txt",
+      "q03-p10.txt"
+    ]
+  },
+  {
+    "id": "5adbf0a255429947ff17385a",
+    "question": "Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?",
+    "candidates": [
+      "q04-p01.txt",
+      "q04-p02.txt",
+      "q04-p03.txt",
+      "q04-p04.txt",
+      "q04-p05.txt",
+      "q04-p06.txt",
+      "q04-p07.txt",
+      "q04-p08.txt",
+      "q04-p09.txt",
+      "q04-p10.txt"
+    ]
+  },
+  {
+    "id": "5a8e3ea95542995a26add48d",
+    "question": "The director of the romantic comedy \"Big Stone Gap\" is based in what New York city?",
+    "candidates": [
+      "q05-p01.txt",
+      "q05-p02.txt",
+      "q05-p03.txt",
+      "q05-p04.txt",
+      "q05-p05.txt",
+      "q05-p06.txt",
+      "q05-p07.txt",
+      "q05-p08.txt",
+      "q05-p09.txt",
+      "q05-p10.txt"
+    ]
+  },
+  {
+    "id": "5abd94525542992ac4f382d2",
+    "question": "2014 S/S is the debut album of a South Korean boy group that was formed by who?",
+    "candidates": [
+      "q06-p01.txt",
+      "q06-p02.txt",
+      "q06-p03.txt",
+      "q06-p04.txt",
+      "q06-p05.txt",
+      "q06-p06.txt",
+      "q06-p07.txt",
+      "q06-p08.txt",
+      "q06-p09.txt",
+      "q06-p10.txt"
+    ]
+  },
+  {
+    "id": "5a85b2d95542997b5ce40028",
+    "question": "Who was known by his stage name Aladin and helped organizations improve their performance as a consultant?",
+    "candidates": [
+      "q07-p01.txt",
+      "q07-p02.txt",
+      "q07-p03.txt",
+      "q07-p04.txt",
+      "q07-p05.txt",
+      "q07-p06.txt",
+      "q07-p07.txt",
+      "q07-p08.txt",
+      "q07-p09.txt",
+      "q07-p10.txt"
+    ]
+  },
+  {
+    "id": "5a8db19d5542994ba4e3dd00",
+    "question": "Are Local H and For Against both from the United States?",
+    "candidates": [
+      "q08-p01.txt",
+      "q08-p02.txt",
+      "q08-p03.txt",
+      "q08-p04.txt",
+      "q08-p05.txt",
+      "q08-p06.txt",
+      "q08-p07.txt",
+      "q08-p08.txt",
+      "q08-p09.txt",
+      "q08-p10.txt"
+    ]
+  },
+  {
+    "id": "5ab56e32554299637185c594",
+    "question": "Are Random House Tower and 888 7th Avenue both used for real estate?",
+    "candidates": [
+      "q09-p01.txt",
+      "q09-p02.txt",
+      "q09-p03.txt",
+      "q09-p04.txt",
+      "q09-p05.txt",
+      "q09-p06.txt",
+      "q09-p07.txt",
+      "q09-p08.txt",
+      "q09-p09.txt",
+      "q09-p10.txt"
+    ]
+  },
+  {
+    "id": "5ab29c24554299449642c932",
+    "question": "Are Giuseppe Verdi and Ambroise Thomas both Opera composers ?",
+    "candidates": [
+      "q10-p01.txt",
+      "q10-p02.txt",
+      "q10-p03.txt",
+      "q10-p04.txt",
+      "q10-p05.txt",
+      "q10-p06.txt",
+      "q10-p07.txt",
+      "q10-p08.txt",
+      "q10-p09.txt",
+      "q10-p10.txt"
+    ]
+  }
+]
