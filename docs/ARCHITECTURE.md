@@ -127,7 +127,7 @@ run unclosed and its result may be absent from the session.
 Recovery is intentionally manual: stop affected workers, inspect external effects,
 inspect journal metadata, then confirm a known outcome. `resolve` preserves the
 original record and adds the human assertion; it does not run tools or fix history.
-See [recovery procedure](../README.md#recover-without-replaying).
+See [recovery procedure](REFERENCE.md#recover-without-replaying).
 
 ## 5. Separate evaluation architecture
 

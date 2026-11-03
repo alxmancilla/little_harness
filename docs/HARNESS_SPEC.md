@@ -198,7 +198,7 @@ JSON-only values; arguments/bindings travel over stdin, not command arguments.
 
 Timeout, loss of a trustworthy result or uncertain risky failure MUST stop subsequent
 work without retry. Cleanup is bounded/best-effort; parent-memory mutation does not
-propagate, and process/remote effects cannot be undone. See [timeout limits](../README.md#isolated-tool-timeouts).
+propagate, and process/remote effects cannot be undone. See [timeout limits](REFERENCE.md#isolated-tool-timeouts).
 
 ### FR-07 — Bound tool output and preserve batch results
 
@@ -269,7 +269,7 @@ workspace, bounded top-level UTF-8 documents and deterministic keyword-ranked
 passages with source IDs. Evidence MUST remain tool-result data, not execution
 authority. This is lexical retrieval, not vector search or verified factual reasoning.
 File tools MUST reject resolved paths outside the workspace; this is not race-free
-filesystem confinement. See [retrieval limits](../README.md#corpus-and-limits).
+filesystem confinement. See [retrieval limits](REFERENCE.md#corpus-and-limits).
 
 ### FR-14 — Keep evaluation separate and comparable
 
@@ -326,7 +326,7 @@ creates the workspace only when explicitly invoked. Library callers explicitly
 pass runtime controls. `HARNESS_READ_ONLY`,
 `HARNESS_MAX_*`, tool-timeout and journal CLI settings are not inherited as controls
 by HotpotQA workers.
-Full variable/provider reference: [README](../README.md#configuration).
+Full variable/provider reference: [REFERENCE](REFERENCE.md#configuration).
 
 ## 7. Acceptance scenarios and test traceability
 

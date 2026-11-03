@@ -86,7 +86,7 @@ the harness does not secretly retry the tool or repair model output.
 
 A timed-out payment or interrupted file operation may already have taken effect.
 Retrying it could duplicate the action. Verify effects and use the
-[human recovery procedure](../README.md#recover-without-replaying) when appropriate.
+[human recovery procedure](../docs/REFERENCE.md#recover-without-replaying) when appropriate.
 Neither budgets nor subprocess timeouts provide a security sandbox.
 
 ## Explain it back

@@ -204,9 +204,9 @@ guided labs**:
 1. Adapt your [capstone application](lessons/04-build-an-application.md) to another
    domain; the [inventory example](examples/inventory_agent.py) is another reference.
 2. Go beyond the capstone's budgets and read-only policy with
-   [approval and execution controls](README.md#execution-controls) and
+   [approval and execution controls](docs/REFERENCE.md#execution-controls) and
    [argument policies](docs/TOOL_POLICIES.md). A worker timeout is not a security sandbox.
-3. Explore [document retrieval](README.md#teaching-tools-and-retrieval): require evidence,
+3. Explore [document retrieval](docs/REFERENCE.md#teaching-tools-and-retrieval): require evidence,
    distinguish document data from instructions, and admit insufficient information.
 4. Try a [real provider](README.md#run-with-a-real-model) only with explicit cost
    consent and bounded calls. Never share keys, private prompts or sensitive traces.
