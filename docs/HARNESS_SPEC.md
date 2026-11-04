@@ -239,7 +239,11 @@ alone MUST NOT be treated as proof of action completion.
 
 Above the configured JSON-character threshold, the agent MAY replace older history
 with a model-written summary and retain a recent tail beginning at an assistant
-boundary. It MUST avoid repeated compaction without sufficient history growth.
+boundary. When `compact_at_tokens` is set, an estimated token threshold replaces the
+character threshold: the latest main call's reported `input_tokens` plus characters
+added since, divided by `CHARS_PER_TOKEN` (4), or characters alone when usage is
+unknown or the history was just compacted. It is an estimate, not a tokenizer count.
+It MUST avoid repeated compaction without sufficient history growth.
 Empty summaries or expected summarizer failures MUST retain history; summary calls
 still consume the shared budget. Summaries are lossy context, not durable action records.
 
@@ -316,6 +320,7 @@ is not a returned `RunResult.status` value.
 | --- | --- |
 | `max_steps` | 12 main-loop steps per task |
 | `compact_at` | 40,000 JSON characters; teaching CLI configuration can override it |
+| `compact_at_tokens` | Unset; a positive integer switches compaction to an estimated token threshold |
 | Tool output | 8,000 content characters, plus truncation notice; core accepts `max_tool_output` |
 | `limits`, tool timeout, journal, policy, callbacks | Unset/off unless explicitly configured |
 | `quiet`, event content, trace content | `False` |

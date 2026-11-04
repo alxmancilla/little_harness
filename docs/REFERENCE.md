@@ -221,7 +221,10 @@ a general architecture advantage. Package commands such as
 is controlled separately. HotpotQA evaluation explicitly retains full benchmark traces;
 historical artifacts are not rewritten. Support traces default to metadata only.
 
-History compaction uses model-written summaries measured in characters, not tokens.
+History compaction uses model-written summaries. By default its threshold counts
+JSON characters. Library callers can pass `compact_at_tokens=` to `Agent` to use an
+estimated token threshold instead: the last reported input tokens plus about one
+token per four characters added since, or characters alone when usage is unknown.
 It preserves recent tool/result pairs but may lose information. Sessions store
 conversation state; traces are append-only observations, not replay instructions.
 Use a new session path for an unrelated conversation, and distinct paths for each

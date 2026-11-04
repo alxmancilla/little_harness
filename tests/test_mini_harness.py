@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.helpers import (HarnessTestCase, RecordingModel, compaction_history,
-                           REPO, reply, sse_lines, tool_calls)
+                           REPO, reply, sse_lines, tool_calls, used)
 from agents.teaching import TeachingConfig, create_tools, tools as teaching_tools
 from agents.teaching.config import load_env
 from agents.teaching.demos import rag_demo_model
@@ -454,6 +454,44 @@ class CompactionTests(HarnessTestCase):
                 agent._compact(step=1)
                 self.assertEqual(agent.messages, self.history())
         self.assertIn("compact_failed", [r["kind"] for r in self.trace_records()])
+
+    def test_token_threshold_without_usage_estimates_from_characters(self):
+        chars = h._size(self.history())
+        tokens = chars // h.CHARS_PER_TOKEN
+        model = RecordingModel()
+        agent = self.agent(model, compact_at_tokens=tokens + 1)
+        agent.messages = self.history()
+        agent._compact(step=1)
+        self.assertEqual(model.calls, [])
+        model = RecordingModel(reply("SUMMARY"))
+        agent = self.agent(model, compact_at_tokens=tokens - 1)
+        agent.messages = self.history()
+        agent._compact(step=1)
+        self.assertTrue(agent.messages[0]["content"].endswith("SUMMARY"))
+        record = self.trace_records()[-1]
+        self.assertEqual((record["kind"], record["chars_before"], record["estimated_tokens_before"]),
+                         ("compact", chars, tokens))
+        self.assertLess(record["estimated_tokens_after"], tokens)
+
+    def test_token_threshold_uses_reported_input_tokens_then_resets_after_compaction(self):
+        threshold = 2000
+        self.assertLess(h._size(self.history()) // h.CHARS_PER_TOKEN, threshold)
+        model = RecordingModel(used(tool_calls(("t", "current_time", {})), input_tokens=3000),
+                               reply("SUMMARY"), reply("answer"))
+        agent = self.agent(model, compact_at_tokens=threshold)
+        agent.messages = self.history()
+        self.assertEqual(agent.run("continue"), "answer")
+        self.assertEqual(len(model.calls), 3)
+        self.assertIn("tool call: read_file", model.calls[1][0]["content"])
+        record = next(r for r in self.trace_records() if r["kind"] == "compact")
+        self.assertGreaterEqual(record["estimated_tokens_before"], 3000)
+        # The stale report described the replaced history, so the new estimate uses characters.
+        self.assertEqual(record["estimated_tokens_after"], record["chars_after"] // h.CHARS_PER_TOKEN)
+
+    def test_token_threshold_must_be_a_positive_integer(self):
+        for value in (0, -1, True, 1.5, "100"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "compact_at_tokens"):
+                self.agent([], compact_at_tokens=value)
 
 
 class SSETests(unittest.TestCase):

@@ -42,8 +42,8 @@ tuples inside events. The callback cannot mutate model arguments through the eve
 | `approval_decided` | Name/ID, `decision`: `allowed`, `denied` or `aborted` |
 | `tool_started` | Name/ID, `risky`, `action_id`; validated, approved dispatch is about to start |
 | `tool_finished` | Name/ID/action ID, `status`, `is_error`, `outcome_unknown` |
-| `compaction_started` | `chars_before` |
-| `compaction_finished` | `status`; successful replacement adds `dropped`, before/after character counts |
+| `compaction_started` | `chars_before`; with `compact_at_tokens`, also `estimated_tokens_before` |
+| `compaction_finished` | `status`; successful replacement adds `dropped`, before/after character counts and, with `compact_at_tokens`, estimated token counts |
 | `run_stopped` | `status`, `stop_reason` |
 | `run_finished` | Final `status`, `stop_reason`, `usage`, `elapsed_seconds` |
 

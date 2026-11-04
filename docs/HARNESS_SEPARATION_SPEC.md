@@ -54,7 +54,8 @@ standard library. No runtime/application import depends on evaluation.
 `harness.Agent` retains `run()` display text and `run_result()` structured results.
 `tools` is keyword-only and required; tool functions remain trusted Python code.
 `max_tool_output` is a positive character cap (default 8000), `compact_at` defaults
-to 40000, and `writable_roots` defaults to an empty tuple. Construction does not
+to 40000, optional keyword-only `compact_at_tokens` defaults to `None`, and
+`writable_roots` defaults to an empty tuple. Construction does not
 create those roots. Trace/session/journal I/O retains its existing run-time behavior.
 
 The explicit tool mapping snapshots membership, not callable state or arbitrary

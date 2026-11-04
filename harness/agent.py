@@ -57,6 +57,9 @@ SUMMARY_SYSTEM = (
 )
 
 
+CHARS_PER_TOKEN = 4
+
+
 def _size(obj):
     return len(json.dumps(obj))
 
@@ -86,13 +89,21 @@ class Agent:
     validation: return None to continue, or a nonempty error string to reject.
     It cannot grant authority; invalid results/errors propagate without dispatch.
     trace_context snapshots JSON annotations; runtime fields take precedence.
+    compact_at_tokens, when set, replaces the compact_at character threshold with an
+    estimated token threshold: the last reported input_tokens plus characters added since,
+    or characters alone, at CHARS_PER_TOKEN characters per token.
     """
 
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
                  compact_at=40000, session_path=None, *, tools, limits=None, tool_timeout_seconds=None,
                  journal_path=None, on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
-                 trace_include_content=False):
+                 trace_include_content=False, compact_at_tokens=None):
+        if compact_at_tokens is not None and (type(compact_at_tokens) is not int or compact_at_tokens <= 0):
+            raise ValueError("compact_at_tokens must be a positive integer or None")
+        self.compact_at_tokens = compact_at_tokens
+        # (reported input_tokens, message characters sent) from the latest main model call.
+        self._context_usage = None
         if not isinstance(tools, Mapping):
             raise TypeError("tools must be an explicit mapping; use {} for no tools")
         if type(max_tool_output) is not int or max_tool_output <= 0:
@@ -243,18 +254,33 @@ class Agent:
         else:
             self.messages.append({"role": "user", "content": text})
 
+    def _estimated_tokens(self, chars):
+        """Last reported input tokens plus characters added since, else characters alone."""
+        if self._context_usage is None:
+            return chars // CHARS_PER_TOKEN
+        tokens, sent_chars = self._context_usage
+        return tokens + max(0, chars - sent_chars) // CHARS_PER_TOKEN
+
+    def _record_context_usage(self, usage, sent_chars):
+        tokens = usage.get("input_tokens") if isinstance(usage, dict) else None
+        self._context_usage = (tokens, sent_chars) if type(tokens) is int and tokens >= 0 else None
+
     def _compact(self, step):
         """Replace older turns without separating tool calls from their results."""
-        size = _size(self.messages)
-        keep = self.compact_at // 3
-        if size <= self.compact_at or size < self._size_after_compact + keep:
+        chars = _size(self.messages)
+        if self.compact_at_tokens is None:
+            size, limit, per_unit = chars, self.compact_at, 1
+        else:
+            size, limit, per_unit = self._estimated_tokens(chars), self.compact_at_tokens, CHARS_PER_TOKEN
+        keep = limit // 3
+        if size <= limit or size < self._size_after_compact + keep:
             return
         sizes = [_size(m) for m in self.messages]
         assistants = [i for i, m in enumerate(self.messages) if m["role"] == "assistant"]
         cut, tail = None, 0
         for i in range(len(self.messages) - 1, 1, -1):
             tail += sizes[i]
-            if tail > keep:
+            if tail > keep * per_unit:
                 break
             if self.messages[i]["role"] == "assistant":
                 cut = i
@@ -262,7 +288,8 @@ class Agent:
             cut = next((i for i in reversed(assistants) if 2 <= i < len(self.messages)), None)
         if cut is None:
             return
-        self._emit("compaction_started", chars_before=size)
+        token_fields = {"estimated_tokens_before": size} if self.compact_at_tokens is not None else {}
+        self._emit("compaction_started", chars_before=chars, **token_fields)
         try:
             summary = self._call_model(SUMMARY_SYSTEM,
                                       [{"role": "user", "content": render_transcript(self.messages[:cut])}], [],
@@ -287,13 +314,20 @@ class Agent:
         self.messages[:cut] = [{"role": "user", "content":
                                 "[Summary of the earlier conversation, compacted to save context. "
                                 "Not a new request.]\n" + text}]
-        self._size_after_compact = _size(self.messages)
+        chars_after = _size(self.messages)
+        # Reported usage described the replaced history; estimate from characters until the next call.
+        self._context_usage = None
+        if self.compact_at_tokens is None:
+            self._size_after_compact = chars_after
+        else:
+            self._size_after_compact = self._estimated_tokens(chars_after)
+            token_fields["estimated_tokens_after"] = self._size_after_compact
         self._print(f"[step {step}] 🗜  compacted {cut} messages into a summary "
-                    f"({size} -> {self._size_after_compact} chars)")
-        self._trace("compact", step=step, dropped=cut, chars_before=size,
-                    chars_after=self._size_after_compact, content_fields={"summary": text}, usage=summary.get("usage"))
-        self._emit("compaction_finished", status="completed", dropped=cut, chars_before=size,
-                   chars_after=self._size_after_compact, content={"summary": text})
+                    f"({chars} -> {chars_after} chars)")
+        self._trace("compact", step=step, dropped=cut, chars_before=chars, chars_after=chars_after,
+                    **token_fields, content_fields={"summary": text}, usage=summary.get("usage"))
+        self._emit("compaction_finished", status="completed", dropped=cut, chars_before=chars,
+                   chars_after=chars_after, **token_fields, content={"summary": text})
 
     def _trace(self, kind, *, content_fields=None, **data):
         """Separate runtime metadata from opt-in conversation and error content."""
@@ -595,6 +629,8 @@ class Agent:
                 return f"[stopped: model call failed: {e}]"
             if streamed:
                 self._print()
+            if self.compact_at_tokens is not None:
+                self._record_context_usage(resp.get("usage"), _size(self.messages))
             content = resp["content"]
             self.messages.append({"role": "assistant", "content": content})
             self._trace("model", step=step, stop_reason=resp.get("stop_reason"),
