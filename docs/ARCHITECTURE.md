@@ -43,7 +43,7 @@ view below for the journal commit-before-invocation requirement.
 | File / symbol | Responsibility | Important boundary |
 | --- | --- | --- |
 | `harness/agent.py`: `Agent` | Run lifecycle, conversation, compaction, dispatch and saving | Requires explicit tools/paths; imports no application |
-| `harness/tools.py`: `ToolRegistry`, `validate_tool_input` | Instance-owned registry and primitive schemas | Tool semantic checks still belong inside functions |
+| `harness/tools.py`: `ToolRegistry`, `validate_tool_input` | Instance-owned registry; primitive schemas with optional choices and descriptions | Tool semantic checks still belong inside functions |
 | `harness/model_clients.py`: `HTTPModel` and adapters | HTTP/SSE, pre-stream retry, normalized responses, provider selection | Depends on no agent state; rejects model HTTP redirects |
 | `harness/runtime.py` | Immutable limits/usage/results and mutable per-task budget | Shared across main and summary calls; no provider dependency |
 | `harness/policy.py`: `ToolPolicy` | Explicit read-only declarations and argument predicates | Trusted, synchronous parent code; not authorization isolation |

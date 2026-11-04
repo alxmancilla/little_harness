@@ -148,13 +148,18 @@ the task; the default main-loop budget is 12 steps.
 
 Only registered/allowlisted names MAY dispatch. Signature-derived schemas support
 `str`, `int`, `float` and `bool`, required fields and rejection of unknown arguments.
+`typing.Literal` choices that are all strings or all integers become `enum`;
+`typing.Annotated[T, "text"]` with exactly one nonempty string adds a parameter
+`description`, where `T` is a supported type or `Literal`.
 Registration MUST reject missing/unsupported annotations, incompatible defaults,
 duplicate names, positional-only/variadic parameters and coroutine/generator tools
 before modifying the registry. Builtin postponed annotation strings are supported
-without evaluating expressions; keyword-only parameters work. Return annotations
+without evaluating expressions; postponed `Literal`/`Annotated` strings are rejected.
+Keyword-only parameters work. Return annotations
 do not define output validation. Deliberate replacement requires explicit removal.
 Before approval or execution, the harness MUST validate object shape, required
-fields, supported primitive types and finite floating-point numbers. Tools MUST retain their own semantic checks;
+fields, supported primitive types, `enum` choices (matching type and value) and
+finite floating-point numbers. Tools MUST retain their own semantic checks;
 the generic validator does not enforce all schema keywords or numeric/string bounds.
 Truncated argument requests MUST return a not-run error without dispatch.
 

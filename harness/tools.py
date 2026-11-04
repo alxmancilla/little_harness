@@ -3,11 +3,36 @@
 import inspect
 import math
 from functools import partial
+from typing import Annotated, Literal, get_args, get_origin
 
 from .tool_execution import validate_tool_timeout
 
 
 PY_TO_JSON = {str: "string", int: "integer", float: "number", bool: "boolean"}
+
+
+def _parameter_schema(name, annotation):
+    """Map str/int/float/bool, Literal choices and an Annotated description to a property schema."""
+    description = None
+    if get_origin(annotation) is Annotated:
+        annotation, *metadata = get_args(annotation)
+        if len(metadata) != 1 or type(metadata[0]) is not str or not metadata[0].strip():
+            raise TypeError(f"tool parameter {name}: Annotated needs exactly one nonempty description string")
+        description = metadata[0]
+    if get_origin(annotation) is Literal:
+        choices = list(get_args(annotation))
+        kinds = {type(choice) for choice in choices}
+        if len(kinds) != 1 or not kinds <= {str, int}:
+            raise TypeError(f"tool parameter {name}: Literal choices must be all strings or all integers")
+        schema = {"type": PY_TO_JSON[kinds.pop()], "enum": choices}
+    elif annotation in (str, int, float, bool):
+        schema = {"type": PY_TO_JSON[annotation]}
+    else:
+        raise TypeError(f"tool parameter {name} needs an explicit str, int, float or bool annotation, "
+                        "optionally as Literal choices or wrapped in Annotated with a description")
+    if description is not None:
+        schema["description"] = description
+    return schema
 
 
 class ToolRegistry(dict):
@@ -41,9 +66,7 @@ class ToolRegistry(dict):
                 annotation = param.annotation
                 if type(annotation) is str:
                     annotation = {kind.__name__: kind for kind in PY_TO_JSON}.get(annotation)
-                if annotation not in (str, int, float, bool):
-                    raise TypeError(f"tool parameter {name} needs an explicit str, int, float or bool annotation")
-                props[name] = {"type": PY_TO_JSON[annotation]}
+                props[name] = _parameter_schema(name, annotation)
                 if param.default is inspect.Parameter.empty:
                     required.append(name)
                 else:
@@ -63,7 +86,7 @@ class ToolRegistry(dict):
 
 
 def validate_tool_input(args, schema):
-    """Validate flat primitive schemas, not general JSON Schema or semantics."""
+    """Validate flat primitive schemas and enum choices, not general JSON Schema or semantics."""
     if not isinstance(args, dict):
         raise ValueError("tool arguments must be a JSON object")
     properties = schema.get("properties", {})
@@ -79,3 +102,6 @@ def validate_tool_input(args, schema):
             raise ValueError(f"argument {name} must be {expected}")
         if expected == "number" and type(value) is float and not math.isfinite(value):
             raise ValueError(f"argument {name} must be finite")
+        choices = properties.get(name, {}).get("enum")
+        if choices is not None and not any(type(choice) is type(value) and choice == value for choice in choices):
+            raise ValueError(f"argument {name} must be one of: {', '.join(str(choice) for choice in choices)}")

@@ -161,8 +161,10 @@ def word_count(text: str) -> str:
 ````
 </augment_code_snippet>
 
-Parameter types are `str`, `int`, `float` and `bool`. The runtime checks object
-shape, required fields, unknown arguments and primitive types before execution;
+Parameter types are `str`, `int`, `float` and `bool`. Use `Literal["asc", "desc"]`
+(all strings or all integers) for fixed choices, and `Annotated[str, "description"]`
+to describe a parameter to the model. The runtime checks object shape, required
+fields, unknown arguments, primitive types and choices before execution;
 tools still enforce their own path, range and authorization rules.
 Registration rejects unsupported/missing annotations, incompatible defaults and
 duplicate names rather than silently guessing a schema. Keyword-only parameters

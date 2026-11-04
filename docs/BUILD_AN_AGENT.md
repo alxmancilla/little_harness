@@ -65,7 +65,9 @@ in model-visible schemas. Replace the approved documents/catalog for your domain
 Do not expose credentials, database connections or entire filesystems as arguments.
 
 Tools accept explicitly annotated `str`, `int`, `float` or `bool` parameters,
-including keyword-only parameters. Unsupported/missing annotations, incompatible
+including keyword-only parameters. `Literal[...]` limits a parameter to fixed
+string or integer choices that the runtime enforces; `Annotated[type, "text"]`
+gives the model a per-parameter description. Unsupported/missing annotations, incompatible
 defaults, duplicate names, positional-only/variadic parameters, coroutines and
 generators fail at registration. Builtin postponed annotations work without
 evaluating annotation expressions. Named synchronous callable objects and partials

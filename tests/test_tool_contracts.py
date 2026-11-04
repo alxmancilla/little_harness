@@ -2,6 +2,7 @@
 
 import inspect
 from functools import partial
+from typing import Annotated, Literal
 
 from harness import ToolRegistry, validate_tool_input
 from tests.helpers import TemporaryDirectoryTestCase
@@ -66,6 +67,48 @@ class ToolContractTests(TemporaryDirectoryTestCase):
                     with self.assertRaisesRegex(TypeError, "synchronous"):
                         tools.tool()(fn)
                     self.assertEqual(tools, {})
+
+    def test_annotated_descriptions_and_literal_choices_become_schema_and_are_enforced(self):
+        tools = ToolRegistry()
+
+        @tools.tool(read_only=True)
+        def sort_items(path: Annotated[str, "Path relative to the workspace"],
+                       order: Annotated[Literal["asc", "desc"], "Sort direction"] = "asc",
+                       top: Literal[1, 5, 10] = 5):
+            """Sort items."""
+            return f"{path}:{order}:{top}"
+
+        properties = tools["sort_items"]["schema"]["input_schema"]["properties"]
+        self.assertEqual(properties, {
+            "path": {"type": "string", "description": "Path relative to the workspace"},
+            "order": {"type": "string", "enum": ["asc", "desc"], "description": "Sort direction"},
+            "top": {"type": "integer", "enum": [1, 5, 10]}})
+        schema = tools["sort_items"]["schema"]["input_schema"]
+        validate_tool_input({"path": "a", "order": "desc", "top": 10}, schema)
+        for args in ({"path": "a", "order": "up"}, {"path": "a", "top": 3}, {"path": "a", "top": True}):
+            with self.subTest(args=args), self.assertRaisesRegex(ValueError, "must"):
+                validate_tool_input(args, schema)
+
+    def test_invalid_annotated_and_literal_forms_are_rejected_atomically(self):
+        def sample(value: str):
+            pass
+
+        for annotation in (Annotated[str, 1], Annotated[str, ""], Annotated[str, "a", "b"],
+                           Literal["a", 1], Literal[True, False], Literal[1.5], Annotated[list, "items"],
+                           "Literal['a']"):
+            sample.__annotations__["value"] = annotation
+            tools = ToolRegistry()
+            with self.subTest(annotation=str(annotation)), self.assertRaisesRegex(TypeError, "value"):
+                tools.tool()(sample)
+            self.assertEqual(tools, {})
+
+        def defaulted(order="sideways"):
+            pass
+        defaulted.__annotations__["order"] = Literal["asc", "desc"]
+        tools = ToolRegistry()
+        with self.assertRaisesRegex(ValueError, "one of"):
+            tools.tool()(defaulted)
+        self.assertEqual(tools, {})
 
     def test_future_builtin_annotations_work_without_evaluating_expressions(self):
         namespace = {}

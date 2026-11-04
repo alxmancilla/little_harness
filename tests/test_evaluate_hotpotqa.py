@@ -198,7 +198,7 @@ class WorkerTests(HotpotQAWorkerTestCase):
         self.assertEqual(result["read_evidence_fraction"], 1)
         errors = [event["output"] for event in map(json.loads, self.trace.read_text().splitlines())
                   if event["kind"] == "tool" and event["is_error"]]
-        self.assertIn("Available filenames: q01-p01.txt", errors[0])
+        self.assertIn("argument document must be one of: q01-p01.txt", errors[0])
         self.assertIn("sentence_count=2", errors[1])
         self.assertIn("0 <= start_sentence < 2", errors[1])
 
