@@ -4,9 +4,10 @@ import json
 import os
 import sys
 from collections.abc import Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from .journal import ExecutionJournal, JournalError
@@ -17,6 +18,18 @@ from .tool_execution import ToolExecutionStopped, ToolOutcome, run_isolated_tool
 from .policy import PolicyDecision, ToolPolicy
 
 from .tools import validate_tool_input
+
+
+@dataclass(frozen=True)
+class ToolCallOutcome:
+    """Result of one tool request; execution is recorded for timed/journaled or denied actions."""
+
+    output: str
+    is_error: bool
+    execution: Optional[ToolOutcome] = None
+    dispatched: bool = False
+    action_id: Optional[str] = None
+    stop_reason: Optional[str] = None
 
 
 def ask_human(name, args, preview=500):
@@ -107,10 +120,8 @@ class Agent:
         self.event_callback_failed = False
         self._event_run_id, self._event_step, self._event_sequence = None, None, 0
         self.tool_timeout_seconds = validate_tool_timeout(tool_timeout_seconds)
-        self._tool_execution = None
-        self._tool_stop_reason = None
-        self._tool_dispatched = False
-        self._tool_action_id = self._journal_run_id = None
+        # Journal action in flight, read only when an exception interrupts dispatch.
+        self._active_action_id = self._journal_run_id = None
         self.model = model
         self.system = system
         # Snapshot membership; functions and trusted entry metadata remain application-owned.
@@ -299,10 +310,8 @@ class Agent:
             f.write(json.dumps(record) + "\n")
 
     def _run_tool(self, call):
-        """Return (output_text, is_error); budget/cancellation exceptions propagate."""
-        self._tool_execution = self._tool_stop_reason = None
-        self._tool_action_id = None
-        self._tool_dispatched = False
+        """Return a ToolCallOutcome; budget/cancellation exceptions propagate."""
+        self._active_action_id = None
         name, args = call["name"], call.get("input", {})
         entry = self.tools.get(name)
         if self.tool_admission is not None:
@@ -310,13 +319,13 @@ class Agent:
             if rejection is not None:
                 if type(rejection) is not str or not rejection:
                     raise ValueError("tool_admission must return None or a nonempty rejection string")
-                return rejection, True
+                return ToolCallOutcome(rejection, True)
         if entry is None:
-            return f"unknown tool '{name}'. Available: {', '.join(self.tools)}", True
+            return ToolCallOutcome(f"unknown tool '{name}'. Available: {', '.join(self.tools)}", True)
         try:
             validate_tool_input(args, entry["schema"].get("input_schema", {}))
         except ValueError as e:
-            return str(e), True
+            return ToolCallOutcome(str(e), True)
         if self.tool_policy is not None:
             try:
                 args = self.tool_policy.snapshot(args)
@@ -328,20 +337,20 @@ class Agent:
             self._emit("tool_policy", name=name, tool_call_id=call.get("id"),
                        allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
+                stop_reason = None
                 if decision.reason == "policy_error":
-                    self._tool_stop_reason = "tool_policy_error"
+                    stop_reason = "tool_policy_error"
                     output = "tool policy check failed; action was not run; fix the policy before continuing"
                 else:
                     output = f"tool policy denied this action ({decision.reason}); action was not run"
-                self._tool_execution = ToolOutcome("not_run", output, True)
-                return output, True
+                return ToolCallOutcome(output, True, ToolOutcome("not_run", output, True), stop_reason=stop_reason)
             if self._budget is not None:
                 self._budget.check("work")
         timeout = entry.get("timeout_seconds", self.tool_timeout_seconds)
         try:
             validate_tool_timeout(timeout)
         except ValueError:
-            return "invalid tool timeout configuration; action was not run", True
+            return ToolCallOutcome("invalid tool timeout configuration; action was not run", True)
         if entry["risky"]:
             self._emit("approval_requested", name=name, tool_call_id=call.get("id"), content={"input": args})
             try:
@@ -353,43 +362,44 @@ class Agent:
             self._emit("approval_decided", name=name, tool_call_id=call.get("id"),
                        decision="allowed" if allowed else "denied")
             if not allowed:
-                return "the user denied this action", True
+                return ToolCallOutcome("the user denied this action", True)
         if self._budget is not None:
             self._budget.check("work")
+        action_id = None
         if self.journal is not None:
             if self._journal_run_id is None:
                 raise JournalError()
-            self._tool_action_id = self.journal.begin(self._journal_run_id, call["id"], name, entry["risky"])
+            action_id = self.journal.begin(self._journal_run_id, call["id"], name, entry["risky"])
+            self._active_action_id = action_id
         try:
-            if self._tool_action_id is not None:
-                self._trace("tool_started", name=name, tool_use_id=call["id"], action_id=self._tool_action_id)
+            if action_id is not None:
+                self._trace("tool_started", name=name, tool_use_id=call["id"], action_id=action_id)
             if self._budget is not None:
                 self._budget.check("work")
             self._emit("tool_started", name=name, tool_call_id=call.get("id"), risky=bool(entry["risky"]),
-                       action_id=self._tool_action_id, content={"input": args})
+                       action_id=action_id, content={"input": args})
             if self._budget is not None and self.on_event is not None:
                 self._budget.check("work")
-            self._tool_dispatched = True
-            outcome = self._invoke_tool(entry, args, timeout)
+            outcome, stop_reason = self._invoke_tool(entry, args, timeout)
         except BaseException as error:
-            if self._tool_action_id is not None:
+            if action_id is not None:
                 try:
                     known_not_run = isinstance(error, BudgetExceeded)
-                    self.journal.finish(self._tool_action_id, "not_run" if known_not_run else "outcome_unknown",
+                    self.journal.finish(action_id, "not_run" if known_not_run else "outcome_unknown",
                                         not known_not_run)
                 except JournalError:
                     pass
             raise
-        if timeout is not None or self.journal is not None:
-            self._tool_execution = outcome
-        if outcome.outcome_unknown and self._tool_stop_reason is None:
-            self._tool_stop_reason = "tool_outcome_unknown"
-        if self._tool_action_id is not None:
+        if outcome.outcome_unknown and stop_reason is None:
+            stop_reason = "tool_outcome_unknown"
+        if action_id is not None:
             try:
-                self.journal.finish(self._tool_action_id, outcome.status, outcome.outcome_unknown)
+                self.journal.finish(action_id, outcome.status, outcome.outcome_unknown)
             except JournalError:
-                self._tool_stop_reason = "journal_error"
-        return outcome.output, outcome.is_error
+                stop_reason = "journal_error"
+        execution = outcome if timeout is not None or self.journal is not None else None
+        return ToolCallOutcome(outcome.output, outcome.is_error, execution, dispatched=True,
+                               action_id=action_id, stop_reason=stop_reason)
 
     def _emit_tool_finished(self, call, output, is_error, *, status, outcome_unknown=False, action_id=None):
         self._emit("tool_finished", name=call["name"], tool_call_id=call["id"],
@@ -401,7 +411,7 @@ class Agent:
         return run_isolated_tool(entry["fn"], args, timeout, self.max_tool_output, risky=entry["risky"])
 
     def _invoke_tool(self, entry, args, timeout):
-        """Invoke once. With journaling, a risky inline failure is also uncertain."""
+        """Invoke once; return (ToolOutcome, stop_reason). With journaling, a risky inline failure is uncertain."""
         if timeout is not None:
             timeout_reason = "tool_timeout"
             remaining = self._budget.remaining_seconds if self._budget is not None else None
@@ -409,19 +419,20 @@ class Agent:
                 self._budget.check("work")
                 timeout, timeout_reason = remaining, "max_seconds"
             outcome = self._execute_isolated(entry, args, timeout)
+            stop_reason = None
             if outcome.outcome_unknown:
-                self._tool_stop_reason = timeout_reason if outcome.status == "timed_out" else "tool_outcome_unknown"
-            return outcome
+                stop_reason = timeout_reason if outcome.status == "timed_out" else "tool_outcome_unknown"
+            return outcome, stop_reason
         try:
             out = str(entry["fn"](**args))
         except Exception as e:
             if self.journal is not None and entry["risky"]:
                 return ToolOutcome("failed", "tool execution failed; outcome unknown; inspect effects before retrying. "
-                                   "Do not retry automatically.", True, True)
-            return ToolOutcome("failed", f"{type(e).__name__}: {e}", True)
+                                   "Do not retry automatically.", True, True), None
+            return ToolOutcome("failed", f"{type(e).__name__}: {e}", True), None
         if len(out) > self.max_tool_output:
             out = out[:self.max_tool_output] + f"\n[truncated, {len(out)} characters total]"
-        return ToolOutcome("completed", out, False)
+        return ToolOutcome("completed", out, False), None
 
     def run(self, task):
         """Compatibility API: return the same display text used by the CLI."""
@@ -566,39 +577,37 @@ class Agent:
             active_id = None
             try:
                 for call in calls:
-                    self._tool_execution = self._tool_stop_reason = None
-                    self._tool_action_id = None
-                    self._tool_dispatched = False
                     if call["id"] in truncated:
-                        out, is_error = ("the arguments for this call were cut off (max_tokens), so it was not run. "
-                                         "Retry with smaller inputs, e.g. split a large file into several writes."), True
+                        result = ToolCallOutcome("the arguments for this call were cut off (max_tokens), so it was "
+                                                 "not run. Retry with smaller inputs, e.g. split a large file into "
+                                                 "several writes.", True)
                     else:
                         self._budget.start_tool_call()
                         active_id = call["id"]
-                        out, is_error = self._run_tool(call)
+                        result = self._run_tool(call)
+                    out, is_error = result.output, result.is_error
                     # Retain results before notifications so cancellation cannot erase an action.
                     results.append({"type": "tool_result", "tool_use_id": call["id"],
                                     "content": out, "is_error": is_error})
                     active_id = None
-                    outcome = self._tool_execution
+                    outcome = result.execution
                     status = outcome.status if outcome else ("failed" if is_error else "completed")
-                    if not self._tool_dispatched:
+                    if not result.dispatched:
                         status = "not_run"
                     self._emit_tool_finished(call, out, is_error, status=status,
                                              outcome_unknown=bool(outcome and outcome.outcome_unknown),
-                                             action_id=self._tool_action_id)
+                                             action_id=result.action_id)
                     mark = "✗" if is_error else "✓"
                     self._print(f"[step {step}] 🔧 {call['name']}({json.dumps(call.get('input', {}))[:120]}) {mark} {out[:200]}")
-                    execution = ({"execution_status": self._tool_execution.status,
-                                  "outcome_unknown": self._tool_execution.outcome_unknown}
-                                 if self._tool_execution is not None else {})
-                    if self._tool_action_id is not None:
-                        execution["action_id"] = self._tool_action_id
+                    execution = ({"execution_status": outcome.status, "outcome_unknown": outcome.outcome_unknown}
+                                 if outcome is not None else {})
+                    if result.action_id is not None:
+                        execution["action_id"] = result.action_id
                     self._trace("tool", step=step, name=call["name"],
                                 content_fields={"input": call.get("input"), "output": out},
                                 is_error=is_error, **execution)
-                    if self._tool_stop_reason is not None:
-                        raise ToolExecutionStopped(self._tool_stop_reason)
+                    if result.stop_reason is not None:
+                        raise ToolExecutionStopped(result.stop_reason)
             except (KeyboardInterrupt, BudgetExceeded, ToolExecutionStopped, JournalError) as e:
                 pending_events = []
                 for call in calls[len(results):]:
@@ -617,7 +626,7 @@ class Agent:
                                     "content": status, "is_error": True})
                     unknown = isinstance(e, KeyboardInterrupt) and call["id"] == active_id
                     pending_events.append((call, status, unknown,
-                                           self._tool_action_id if call["id"] == active_id else None))
+                                           self._active_action_id if call["id"] == active_id else None))
                 self._budget.record_tool_results(results)
                 self.messages.append({"role": "user", "content": results})
                 for call, status, unknown, action_id in pending_events:

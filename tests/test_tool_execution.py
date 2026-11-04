@@ -177,9 +177,10 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         with mock.patch.dict(self.tools["record_action"], {"timeout_seconds": -1}), \
                 mock.patch.object(h, "run_isolated_tool") as execute:
             agent = self.agent([], approve=approve, tool_timeout_seconds=1)
-            output, error = agent._run_tool(f.tool_calls(calls[1])["content"][0])
-        self.assertTrue(error)
-        self.assertIn("configuration", output)
+            outcome = agent._run_tool(f.tool_calls(calls[1])["content"][0])
+        self.assertTrue(outcome.is_error)
+        self.assertFalse(outcome.dispatched)
+        self.assertIn("configuration", outcome.output)
         execute.assert_not_called()
         approve.assert_called_once()
 
@@ -189,8 +190,9 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         self.assertNotIn("timeout_seconds", self.tools["echo"]["schema"])
         agent = self.agent([], tool_timeout_seconds=3)
         with mock.patch.object(h, "run_isolated_tool", return_value=execution.ToolOutcome("completed", "ok", False)) as run:
-            output, error = agent._run_tool(f.tool_calls(("a", "echo", {"value": "ok"}))["content"][0])
-        self.assertEqual((output, error), ("ok", False))
+            outcome = agent._run_tool(f.tool_calls(("a", "echo", {"value": "ok"}))["content"][0])
+        self.assertEqual(outcome, h.ToolCallOutcome("ok", False, execution.ToolOutcome("completed", "ok", False),
+                                                     dispatched=True))
         self.assertEqual(run.call_args.args[2], 0.25)
 
     def test_remaining_task_deadline_shortens_an_isolated_tool_timeout(self):

@@ -165,9 +165,9 @@ class RetrievalTests(HarnessTestCase):
             self.document(name, "nebula")
         self.tools["search_documents"]["fn"].args[0]["max_knowledge_entries"] = 2
         with self.subTest(limit=2):
-            out, error = self.agent([])._run_tool({"name": "search_documents", "input": {"query": "nebula"}})
-        self.assertTrue(error)
-        self.assertIn("too many knowledge directory entries", out)
+            result = self.agent([])._run_tool({"name": "search_documents", "input": {"query": "nebula"}})
+        self.assertTrue(result.is_error)
+        self.assertIn("too many knowledge directory entries", result.output)
 
     def test_corpus_cannot_be_the_workspace_or_inside_it(self):
         for root in (self.config.workspace, self.config.workspace / "knowledge"):
@@ -179,8 +179,9 @@ class RetrievalTests(HarnessTestCase):
     def test_json_escaping_cannot_break_the_tool_output_budget(self):
         for name in ("a.txt", "b.txt", "c.txt"):
             self.document(name, "nebula " + "\x01" * 790)
-        out, error = self.agent([])._run_tool({"name": "search_documents", "input": {"query": "nebula"}})
-        self.assertFalse(error)
+        result = self.agent([])._run_tool({"name": "search_documents", "input": {"query": "nebula"}})
+        out = result.output
+        self.assertFalse(result.is_error)
         self.assertLessEqual(len(out), self.config.max_tool_output)
         self.assertEqual(len(json.loads(out)["results"]), 1)
 
@@ -259,27 +260,31 @@ class RunToolTests(HarnessTestCase):
                 h.validate_tool_input(args, schema)
 
     def test_unknown_tool_is_an_error_listing_available_tools(self):
-        out, is_error = self.agent([])._run_tool({"name": "nope", "input": {}})
-        self.assertTrue(is_error)
-        self.assertIn("calculator", out)
+        result = self.agent([])._run_tool({"name": "nope", "input": {}})
+        self.assertTrue(result.is_error)
+        self.assertFalse(result.dispatched)
+        self.assertIn("calculator", result.output)
 
     def test_denied_risky_tool_is_not_run(self):
         agent = self.agent([], approve=lambda *_: False)
-        out, is_error = agent._run_tool({"name": "write_file", "input": {"path": "denied.txt", "content": "x"}})
-        self.assertEqual((out, is_error), ("the user denied this action", True))
+        result = agent._run_tool({"name": "write_file", "input": {"path": "denied.txt", "content": "x"}})
+        self.assertEqual((result.output, result.is_error, result.dispatched),
+                         ("the user denied this action", True, False))
         self.assertFalse((self.config.workspace / "denied.txt").exists())
 
     def test_exceptions_become_error_text(self):
-        out, is_error = self.agent([])._run_tool({"name": "calculator", "input": {"expression": "1/0"}})
-        self.assertEqual((out, is_error), ("ZeroDivisionError: division by zero", True))
+        result = self.agent([])._run_tool({"name": "calculator", "input": {"expression": "1/0"}})
+        self.assertEqual((result.output, result.is_error, result.dispatched),
+                         ("ZeroDivisionError: division by zero", True, True))
 
     def test_long_output_is_truncated(self):
         def big():
             """Big output."""
             return "x" * (self.config.max_tool_output + 10)
         self.register_tool(big)
-        out, is_error = self.agent([])._run_tool({"name": "big", "input": {}})
-        self.assertFalse(is_error)
+        result = self.agent([])._run_tool({"name": "big", "input": {}})
+        out = result.output
+        self.assertFalse(result.is_error)
         self.assertTrue(out.startswith("x" * self.config.max_tool_output))
         self.assertIn(f"[truncated, {self.config.max_tool_output + 10} characters total]", out)
 
