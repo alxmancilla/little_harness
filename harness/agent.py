@@ -310,61 +310,111 @@ class Agent:
             f.write(json.dumps(record) + "\n")
 
     def _run_tool(self, call):
-        """Return a ToolCallOutcome; budget/cancellation exceptions propagate."""
+        """Pass one request through each gate in order; return a ToolCallOutcome.
+
+        A gate returns a rejection to stop before dispatch, or None to continue.
+        Budget/cancellation exceptions propagate.
+        """
         self._active_action_id = None
         name, args = call["name"], call.get("input", {})
         entry = self.tools.get(name)
-        if self.tool_admission is not None:
-            rejection = self.tool_admission(name, entry is not None)
-            if rejection is not None:
-                if type(rejection) is not str or not rejection:
-                    raise ValueError("tool_admission must return None or a nonempty rejection string")
-                return ToolCallOutcome(rejection, True)
+        rejection = (self._gate_admission(name, entry)
+                     or self._gate_known_tool(name, entry)
+                     or self._gate_validation(entry, args))
+        if rejection:
+            return rejection
+        args, rejection = self._gate_policy(call, entry, args)
+        if rejection:
+            return rejection
+        timeout, rejection = self._gate_timeout(entry)
+        rejection = rejection or self._gate_approval(call, entry, args)
+        if rejection:
+            return rejection
+        if self._budget is not None:
+            self._budget.check("work")
+        return self._dispatch(call, entry, args, timeout)
+
+    def _gate_admission(self, name, entry):
+        """Optional application admission; it learns only whether the tool exists."""
+        if self.tool_admission is None:
+            return None
+        rejection = self.tool_admission(name, entry is not None)
+        if rejection is None:
+            return None
+        if type(rejection) is not str or not rejection:
+            raise ValueError("tool_admission must return None or a nonempty rejection string")
+        return ToolCallOutcome(rejection, True)
+
+    def _gate_known_tool(self, name, entry):
+        """Only tools in this agent's mapping can run."""
         if entry is None:
             return ToolCallOutcome(f"unknown tool '{name}'. Available: {', '.join(self.tools)}", True)
+        return None
+
+    def _gate_validation(self, entry, args):
+        """Arguments must match the advertised schema."""
         try:
             validate_tool_input(args, entry["schema"].get("input_schema", {}))
         except ValueError as e:
             return ToolCallOutcome(str(e), True)
-        if self.tool_policy is not None:
-            try:
-                args = self.tool_policy.snapshot(args)
-                decision = self.tool_policy.check(name, args, declared_read_only=entry.get("read_only"))
-            except Exception:
-                decision = PolicyDecision(False, "policy_error")
-            self._trace("tool_policy", name=name, tool_use_id=call.get("id"),
-                        allowed=decision.allowed, reason=decision.reason)
-            self._emit("tool_policy", name=name, tool_call_id=call.get("id"),
-                       allowed=decision.allowed, reason=decision.reason)
-            if not decision.allowed:
-                stop_reason = None
-                if decision.reason == "policy_error":
-                    stop_reason = "tool_policy_error"
-                    output = "tool policy check failed; action was not run; fix the policy before continuing"
-                else:
-                    output = f"tool policy denied this action ({decision.reason}); action was not run"
-                return ToolCallOutcome(output, True, ToolOutcome("not_run", output, True), stop_reason=stop_reason)
-            if self._budget is not None:
-                self._budget.check("work")
+        return None
+
+    def _gate_policy(self, call, entry, args):
+        """Return (args, rejection); an enabled policy snapshots args before checking them."""
+        if self.tool_policy is None:
+            return args, None
+        name = call["name"]
+        try:
+            args = self.tool_policy.snapshot(args)
+            decision = self.tool_policy.check(name, args, declared_read_only=entry.get("read_only"))
+        except Exception:
+            decision = PolicyDecision(False, "policy_error")
+        self._trace("tool_policy", name=name, tool_use_id=call.get("id"),
+                    allowed=decision.allowed, reason=decision.reason)
+        self._emit("tool_policy", name=name, tool_call_id=call.get("id"),
+                   allowed=decision.allowed, reason=decision.reason)
+        if not decision.allowed:
+            stop_reason = None
+            if decision.reason == "policy_error":
+                stop_reason = "tool_policy_error"
+                output = "tool policy check failed; action was not run; fix the policy before continuing"
+            else:
+                output = f"tool policy denied this action ({decision.reason}); action was not run"
+            return args, ToolCallOutcome(output, True, ToolOutcome("not_run", output, True), stop_reason=stop_reason)
+        if self._budget is not None:
+            self._budget.check("work")
+        return args, None
+
+    def _gate_timeout(self, entry):
+        """Return (timeout, rejection); a per-tool timeout overrides the agent default."""
         timeout = entry.get("timeout_seconds", self.tool_timeout_seconds)
         try:
             validate_tool_timeout(timeout)
         except ValueError:
-            return ToolCallOutcome("invalid tool timeout configuration; action was not run", True)
-        if entry["risky"]:
-            self._emit("approval_requested", name=name, tool_call_id=call.get("id"), content={"input": args})
-            try:
-                approval_args = self.tool_policy.snapshot(args) if self.tool_policy is not None else args
-                allowed = bool(self.approve(name, approval_args))
-            except BaseException:
-                self._emit("approval_decided", name=name, tool_call_id=call.get("id"), decision="aborted")
-                raise
-            self._emit("approval_decided", name=name, tool_call_id=call.get("id"),
-                       decision="allowed" if allowed else "denied")
-            if not allowed:
-                return ToolCallOutcome("the user denied this action", True)
-        if self._budget is not None:
-            self._budget.check("work")
+            return timeout, ToolCallOutcome("invalid tool timeout configuration; action was not run", True)
+        return timeout, None
+
+    def _gate_approval(self, call, entry, args):
+        """Risky tools need approval from trusted application code."""
+        if not entry["risky"]:
+            return None
+        name = call["name"]
+        self._emit("approval_requested", name=name, tool_call_id=call.get("id"), content={"input": args})
+        try:
+            approval_args = self.tool_policy.snapshot(args) if self.tool_policy is not None else args
+            allowed = bool(self.approve(name, approval_args))
+        except BaseException:
+            self._emit("approval_decided", name=name, tool_call_id=call.get("id"), decision="aborted")
+            raise
+        self._emit("approval_decided", name=name, tool_call_id=call.get("id"),
+                   decision="allowed" if allowed else "denied")
+        if not allowed:
+            return ToolCallOutcome("the user denied this action", True)
+        return None
+
+    def _dispatch(self, call, entry, args, timeout):
+        """Commit the journal action, invoke once, then record the outcome."""
+        name = call["name"]
         action_id = None
         if self.journal is not None:
             if self._journal_run_id is None:

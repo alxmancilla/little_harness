@@ -14,7 +14,8 @@ Read [Agent._run](../harness/agent.py), starting at `def _run(self, task)`:
 3. Ask the model for a normalized response; append its text/tool requests to history.
 4. With no tool requests, return an execution result. This is not proof of correctness.
 5. Otherwise, check each attempt's budget and dispatch through `_run_tool`.
-6. `_run_tool` checks allowlisting, inputs, policy and approval before any action.
+6. `_run_tool` calls its `_gate_*` methods in order (admission, known tool, inputs,
+   policy, timeout setting, approval) before `_dispatch` runs any action.
 7. Append paired tool results together, then ask the model again. Stop on a limit
    or uncertain effect; do not blindly retry an action that might already have happened.
 

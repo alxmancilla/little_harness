@@ -77,10 +77,13 @@ than continuing to later calls or steps.
 3. `_call_model()` admits/counts the logical call, delivers model observations and
    records usage. HTTP/SSE or a scripted callable returns normalized content.
 4. For each non-truncated tool request, the agent admits an attempt. `_run_tool()`
-   performs allowlist lookup, optional application admission, primitive validation,
-   optional policy, timeout-config validation and risky-action approval, in that order.
-5. After budget rechecks, an enabled journal commits `started`. The agent emits a
-   tool-start observation, rechecks available budget, then `_invoke_tool()` executes
+   performs allowlist lookup, then calls one gate method per check in order:
+   `_gate_admission` (optional application admission), `_gate_known_tool`,
+   `_gate_validation` (primitive validation), `_gate_policy` (optional policy),
+   `_gate_timeout` (timeout-config validation) and `_gate_approval` (risky-action
+   approval). The first gate that rejects returns a not-run `ToolCallOutcome`.
+5. After budget rechecks, `_dispatch()` lets an enabled journal commit `started`, emits
+   a tool-start observation, rechecks available budget, then `_invoke_tool()` executes
    inline or starts the isolated worker. Policies/approval never run in that worker.
 6. A trustworthy tool outcome is committed to the journal when enabled. The loop
    retains its result before finish notifications/printing/tracing. Completed and

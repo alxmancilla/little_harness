@@ -6,13 +6,13 @@ flowchart LR
         registry["ToolRegistry and schemas - harness/tools.py"] --> agent
         agent --> clients["Model adapters and HTTP/SSE - harness/model_clients.py"]
         agent -->|"offline alternative"| scripted["ScriptedModel - no HTTP"]
-        agent --> gates["Agent._run_tool - allowlist, admission, validation, policy, approval"]
+        agent --> gates["Agent._run_tool gates - admission, known tool, validation, policy, timeout, approval"]
         registry --> gates
         policy["ToolPolicy - harness/policy.py"] -.-> gates
         approval["Human or application approval"] -.-> gates
         agent --> journal["ExecutionJournal - harness/journal.py"]
         gates -->|"optional durable start before invocation"| journal
-        gates --> invoke["Agent._invoke_tool"]
+        gates --> invoke["Agent._dispatch and _invoke_tool"]
         invoke -->|"default"| inline["Registered function - inline"]
         agent -.-> events["RunEvent callback - harness/events.py"]
     end
