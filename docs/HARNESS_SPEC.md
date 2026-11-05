@@ -286,7 +286,10 @@ Every adapter MUST raise `ModelError(message, category)` with one fixed category
 `provider_error` (an error event in the stream); `unknown` is the default for
 application-raised errors and unlisted values are rejected. The category, never the
 message, is traced and emitted as metadata. All adapters MUST pass the same
-conformance scenarios (`ProviderConformanceTests`).
+conformance scenarios (`ProviderConformanceTests`). Because error bodies are never
+read, a context-window overflow is not distinguished from other rejected requests:
+it is `request_rejected`, is not retried and stops the task as `model_error`.
+Applications avoid it with a `compact_at_tokens` threshold below the context window.
 
 ### FR-13 — Retrieve bounded, untrusted local evidence
 

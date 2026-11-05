@@ -226,6 +226,10 @@ History compaction uses model-written summaries. By default its threshold counts
 JSON characters. Library callers can pass `compact_at_tokens=` to `Agent` to use an
 estimated token threshold instead: the last reported input tokens plus about one
 token per four characters added since, or characters alone when usage is unknown.
+For live models, set `compact_at_tokens` comfortably below the model's context window,
+leaving room for the system prompt, tool schemas and the reply. The harness does not
+detect or recover from a provider's "context too long" error: it arrives as an HTTP
+400 (`ModelError` category `request_rejected`) and the task stops with `model_error`.
 Compaction changes only what the model sees: the latest summary followed by recent
 messages, keeping tool calls with their results. The summary may lose information,
 but the conversation history itself is never shortened. A session file stores that
