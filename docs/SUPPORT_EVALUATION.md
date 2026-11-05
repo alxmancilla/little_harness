@@ -6,11 +6,9 @@ There is no LLM judge, hidden repair call, automatic retry, message sending or d
 
 ## Start offline
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m evaluation.support.evaluate --output runs/support-smoke-01
 ````
-</augment_code_snippet>
 
 Choose a **new** output directory each time. Existing directories and symlinks are
 rejected before model setup. Never delete an earlier run just to reuse its name.
@@ -57,12 +55,10 @@ Configure provider credentials/settings in your shell; do not paste them into
 commands or this dataset. No credentials, endpoints or raw model configuration are
 written by this evaluator. Start with one case to inspect cost and behavior:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m evaluation.support.evaluate --live --limit 1 --output runs/support-live-01 \
   --max-model-calls 4 --max-tool-calls 4 --max-seconds 30
 ````
-</augment_code_snippet>
 
 `--live` explicitly permits paid calls using the same application factory and data.
 Omit `--limit` to run all twelve cases. Defaults are six logical model calls, six
@@ -114,11 +110,9 @@ fictional/non-sensitive and control output-directory permissions and retention.
 The single-turn cases give each question a fresh agent. Real users follow up, correct
 themselves and add constraints, so a second suite scores whole conversations:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m evaluation.support.multiturn --output runs/support-multiturn-01
 ````
-</augment_code_snippet>
 
 [scenarios.json](../evaluation/support/scenarios.json) holds five **unreviewed synthetic
 draft** scenarios of two turns each: a follow-up on a new topic (m01), a corrected

@@ -11,11 +11,9 @@ repair an invalid call and understand why limits matter.
 This lab returns to Lab 1's ordinary `word_count`, not the distinct-count tool.
 The scripted model deliberately sends `{"text": 42}` instead of a string.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab03_failures --messages --events
 ````
-</augment_code_snippet>
 
 With the untouched starter, expect status **`stopped`**, reason **`max_model_calls`**,
 no final answer, three model calls, three tool attempts/errors and **zero executions**.
@@ -47,11 +45,9 @@ Implement `next_action(tool_result)` in [exercises.py](exercises.py):
   with the original synthetic text and a new ID.
 - Return `"finish"` on success. The lab model will return the tool's value as its answer.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab03_failures --check
 ````
-</augment_code_snippet>
 
 The starter should fail. After your fix, expect six passing checks and:
 
@@ -72,11 +68,9 @@ calls to repair the input **and** obtain a final answer.
 2. Choose one branch for error and one for success.
 3. Compare `next_action` in [solutions.py](solutions.py) after attempting it.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab03_failures --solution --check --events
 ````
-</augment_code_snippet>
 
 ## Do not generalize this into blind retries
 

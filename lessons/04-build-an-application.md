@@ -23,12 +23,10 @@ loop, not your product data, calculations or factory functions.
 
 Before running, predict what happens when the starter advertises **no tools**:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab04_capstone --messages --events
 python3 -m lessons.lab04_capstone --check
 ````
-</augment_code_snippet>
 
 Expect the starter demo to complete with `Unable to quote that order.`, one
 unknown-tool error and zero executions. Completing the loop is not the same as
@@ -92,13 +90,11 @@ dispatch of tools without that declaration; it is not an operating-system sandbo
 
 Once your factories work, run all three scenarios:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab04_capstone --scenario happy --messages
 python3 -m lessons.lab04_capstone --scenario repair --events
 python3 -m lessons.lab04_capstone --scenario repeat --events
 ````
-</augment_code_snippet>
 
 | Scenario | Result | Model calls | Tool attempts | Actual executions |
 | --- | --- | --- | --- | --- |
@@ -121,11 +117,9 @@ separately from assessment; assessment uses fixed inputs and fresh applications.
 
 ## 4. Assess the application, not just its happy path
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab04_capstone --check
 ````
-</augment_code_snippet>
 
 Nine checks cover schemas, calculations, validated independent snapshots, agent
 controls, a new SKU, honest failures, recovery, bounded repetition and policy
@@ -136,12 +130,10 @@ Use hints first. If stuck, compare [capstone_solution.py](capstone_solution.py),
 which implements the same application contract without importing earlier solutions.
 Reference mode never overwrites your code:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab04_capstone --solution --check
 python3 -m lessons.lab04_capstone --solution --scenario repair --messages --events
 ````
-</augment_code_snippet>
 
 ## 5. Add a test you own
 
@@ -152,7 +144,6 @@ running the tool. A meaningful test should fail if you break the calculation.
 For example, create a new `tests/test_my_order_app.py` (do not overwrite existing work)
 and adapt this test to your chosen case:
 
-<augment_code_snippet path="tests/test_my_order_app.py" mode="EXCERPT">
 ````python
 import json
 import unittest
@@ -163,13 +154,10 @@ class OrderTests(unittest.TestCase):
         quote = json.loads(tools["quote_total"]["fn"]("FREE", 1))
         self.assertEqual(quote["total_cents"], 0)
 ````
-</augment_code_snippet>
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m unittest -v tests.test_my_order_app
 ````
-</augment_code_snippet>
 
 ## Completion rubric and independent handoff
 

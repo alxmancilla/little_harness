@@ -17,11 +17,9 @@ No machine-learning background is required.
 4. Run the version check below. Use Python **3.9+**. On Windows, replace `python3`
    with `python` or `py -3` if that is your Python launcher.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 --version
 ````
-</augment_code_snippet>
 
 There are no third-party dependencies to install, API keys to configure or datasets
 to download. You do **not** need to copy `.env.example` or run `pip install`.
@@ -36,11 +34,9 @@ ordered metadata event names. Neither is a view into a model's private reasoning
 
 Before writing code, see the whole interaction working:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.preview
 ````
-</augment_code_snippet>
 
 Expect **status `completed`, answer `3`, two model calls and one tool execution**,
 followed by `Preview complete.` You have a working setup. The preview uses an
@@ -85,11 +81,9 @@ for the application capstone.
 After the preview, begin with [Lab 0](lessons/00-from-functions-to-agents.md). Run
 its starter to see the direct function and fixed workflow:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics
 ````
-</augment_code_snippet>
 
 The CLI labels this **exercise mode**. An untouched loop reports `not_implemented`:
 that means the exercise is ready to edit, not that your setup is broken.
@@ -110,11 +104,9 @@ Assessment stops at the first unfinished checkpoint so you can focus on one thin
 
 After building the loop, compare it with the supported runtime in Lab 1:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab01_loop --messages --events
 ````
-</augment_code_snippet>
 
 Use the [annotated execution trace](lessons/annotated-trace.md) to connect its output
 to the code. Then work through the labs in order.
@@ -131,7 +123,6 @@ to the code. Then work through the labs in order.
    or the separate [capstone reference](lessons/capstone_solution.py).
 5. Explain the result in your own words; passing checks alone is not the goal.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check
 python3 -m lessons.lab01_loop --check
@@ -139,7 +130,6 @@ python3 -m lessons.lab02_tools --check
 python3 -m lessons.lab03_failures --check
 python3 -m lessons.lab04_capstone --check
 ````
-</augment_code_snippet>
 
 **Untouched exercises intentionally fail these checks** (exit status 1). Lab 2
 initially produces a valid but incorrect answer; Lab 3 initially stops at a call
@@ -153,7 +143,6 @@ prints the checkpoint conversations, which use their own synthetic test inputs.
 
 `--solution` selects reference functions without modifying your work:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --solution --check
 python3 -m lessons.lab01_loop --solution --check
@@ -161,7 +150,6 @@ python3 -m lessons.lab02_tools --solution --check
 python3 -m lessons.lab03_failures --solution --check
 python3 -m lessons.lab04_capstone --solution --check
 ````
-</augment_code_snippet>
 
 All five should pass. These checks assess the exercises, not a live LLM.
 Finish the capstone by adding a test you own and explaining the observed controls;

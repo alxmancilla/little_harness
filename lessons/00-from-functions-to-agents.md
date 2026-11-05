@@ -18,13 +18,11 @@ files, shell commands or external actions.
 
 Read `word_count` in [lab00_basics.py](lab00_basics.py):
 
-<augment_code_snippet path="lessons/lab00_basics.py" mode="EXCERPT">
 ````python
 def word_count(text: str) -> str:
     """Count whitespace-separated words, including repeats."""
     return str(len(text.split()))
 ````
-</augment_code_snippet>
 
 Predict the result for `little harness little`. Does solving this problem require
 a model? No: a direct function call is simpler, cheaper and more predictable.
@@ -35,11 +33,9 @@ a model? No: a direct function call is simpler, cheaper and more predictable.
 Application code chooses both steps in advance. This is a **fixed workflow**, not
 a model choosing its next action. More steps alone do not make it an agent.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics
 ````
-</augment_code_snippet>
 
 The first lines show direct counting and the fixed workflow. The CLI labels this
 **exercise mode**; the untouched loop reports `not_implemented` and tells you where
@@ -50,12 +46,10 @@ failure is reserved for the explicit invalid scenario later in this lab.
 
 Inspect `counting_model(messages)`. On its first call it returns this dictionary:
 
-<augment_code_snippet mode="EXCERPT">
 ````python
 {"type": "tool_use", "id": "count-1", "name": "word_count",
  "input": {"text": "little harness little"}}
 ````
-</augment_code_snippet>
 
 That dictionary does **not** run Python. Trusted application code must decide
 whether the name and arguments are allowed, then call the function explicitly.
@@ -98,11 +92,9 @@ one-element list. If the block's type is `text`, return `completed` and its text
 as the answer. You do not need tool execution yet: this check's model finishes
 immediately. An unfinished tool branch can return a `stopped` report for now.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check --stage 1
 ````
-</augment_code_snippet>
 
 An untouched starter fails **one** check and prints a hint. Once it passes, the
 CLI gives you the next command. That is your first implemented piece of the loop.
@@ -115,11 +107,9 @@ budget. It checks the model call and the actual function invocation, not result
 delivery yet. You can temporarily return a `stopped` report after execution.
 Keep using only these supplied pure functions and valid fixtures at this stage.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check --stage 2
 ````
-</augment_code_snippet>
 
 Checkpoint 1 runs again too: adding a tool branch must not break text completion.
 
@@ -128,23 +118,19 @@ Checkpoint 1 runs again too: adding a tool branch must not break text completion
 Remove the temporary early return after execution. Append a `user` message whose
 `content` is a one-element list containing this result (`block` is the proposal):
 
-<augment_code_snippet mode="EXCERPT">
 ````python
 {"type": "tool_result", "tool_use_id": block["id"],
  "content": output, "is_error": is_error}
 ````
-</augment_code_snippet>
 
 Copy the original ID unchanged so the model can match result and request.
 For now, `output` is the function's returned string and `is_error` is `False`.
 Repeat the loop so the model sees the result and can propose its final text.
 A tool's output is not automatically a final answer: the model must finish.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check --stage 3
 ````
-</augment_code_snippet>
 
 The checks use alternate input (`one two`, answer `2`) so copying the demo's `3`
 cannot pass. All three checkpoints so far should now work.
@@ -157,11 +143,9 @@ do not enforce this. On rejection, do **not** call a function: set `output` to a
 short error string and `is_error` to `True`, then append the paired result as usual.
 The model gets a chance to propose a repaired request on the next call.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check --stage 4
 ````
-</augment_code_snippet>
 
 This stage checks repair, unknown names, wrong types, missing/extra keys and
 non-dictionary arguments. Earlier successful stages are still checked.
@@ -174,13 +158,11 @@ return `stopped` with an empty answer even if a tool returned successfully.
 Reject zero, negative or non-integer limits with `ValueError` before calling
 either the model or a tool; `True` is not a valid limit either.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check --stage 5
 python3 -m lessons.lab00_basics --check
 python3 -m lessons.lab00_basics --messages
 ````
-</augment_code_snippet>
 
 There are twelve checks across five **cumulative** checkpoints. Both commands
 with `--check` above assess all five. Assessment stops at the first unfinished
@@ -212,13 +194,11 @@ could already be too late. No external action is used in this demonstration.
 
 After completing your loop, predict and run these scenarios:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --scenario invalid --messages
 python3 -m lessons.lab00_basics --scenario repeat --max-model-calls 2 --messages
 python3 -m lessons.lab00_basics --max-model-calls 1 --messages
 ````
-</augment_code_snippet>
 
 - **Invalid, then repair:** three model calls, one error result, one successful
   execution and answer `3`. The integer input never reaches `word_count`.
@@ -230,13 +210,11 @@ python3 -m lessons.lab00_basics --max-model-calls 1 --messages
 Read `run_loop` in [solutions.py](solutions.py) only after trying it. You can select
 it without overwriting your exercise; `--solution` works with every scenario:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --solution --check --messages
 python3 -m lessons.lab00_basics --solution --scenario invalid --messages
 python3 -m lessons.lab00_basics --solution --scenario repeat --max-model-calls 2
 ````
-</augment_code_snippet>
 
 ## 6. Replace the toy with Little Harness
 

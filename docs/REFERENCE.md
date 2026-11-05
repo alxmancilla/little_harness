@@ -112,20 +112,16 @@ actions block new tasks before model calls. Keep the same journal across restart
 
 Stop affected processes, inspect pending records and verify external effects first:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m harness inspect execution.sqlite3 --pending --limit 100
 ````
-</augment_code_snippet>
 
 Only after human verification, replace `ACTION_ID` with the inspected ID and record
 the actual outcome (`completed`, `failed` or `not_run`):
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m harness resolve execution.sqlite3 ACTION_ID --outcome completed --confirm
 ````
-</augment_code_snippet>
 
 Resolution never executes tools, restores outputs or repairs the conversation.
 Review saved history before continuing. Journaling is a local, single-owner recovery
@@ -182,21 +178,17 @@ Prepare the 7,405-question development source once, if it is not already install
 This downloads about 61 MB, makes no model calls and refuses to overwrite an existing
 output directory:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m evaluation.hotpotqa.prepare --full-dev
 python3 -m evaluation.hotpotqa.run_question --question 1
 ````
-</augment_code_snippet>
 
 Then run an offline paired smoke check. Use **new output directories** each time:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m evaluation.hotpotqa.evaluate --output runs/single-smoke
 python3 -m evaluation.hotpotqa.evaluate --architecture multi-agent --reference runs/single-smoke --output runs/multi-smoke
 ````
-</augment_code_snippet>
 
 Smoke runs exercise real retrieval and sentence reading, then deliberately abstain.
 Quality scores stay `null`: they are not an accuracy baseline. Outputs include
@@ -244,7 +236,6 @@ application.
 
 Run focused suites from the repository root:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m unittest -v tests.test_harness_package
 python3 -m unittest -v tests.test_first_principles_lab tests.test_learning_labs
@@ -253,7 +244,6 @@ python3 -m unittest -v tests.test_learning_capstone
 python3 -m unittest -v tests.test_tool_contracts tests.test_trace_privacy tests.test_support_agent tests.test_runtime_distribution
 python3 -m unittest -v tests.test_support_evaluation
 ````
-</augment_code_snippet>
 
 After preparing the full development set, include the installed-data checks with
 `HARNESS_TEST_HOTPOTQA_DEV=1 python3 -m unittest -q`. This does not download data or

@@ -35,7 +35,6 @@ is copied and frozen; its callables can still close over mutable application sta
 Only tools named in this mapping receive argument restrictions. Read-only mode and
 an argument check both have to allow the call when both are configured.
 
-<augment_code_snippet mode="EXCERPT">
 ````python
 from harness import Agent, ToolPolicy
 policy = ToolPolicy(argument_checks={
@@ -43,7 +42,6 @@ policy = ToolPolicy(argument_checks={
 })
 agent = Agent(model, "Draft a short report.", tools=tools, tool_policy=policy, approve=application_approval)
 ````
-</augment_code_snippet>
 
 Here `tools` is the application's explicit registry containing `write_file`.
 

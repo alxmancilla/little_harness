@@ -13,11 +13,9 @@ The task is the literal text `little harness little`. The registered `word_count
 function counts whitespace-separated words, including repeats. Predict how many
 model calls and tool executions are required to request the tool and return its result.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab01_loop --messages --events
 ````
-</augment_code_snippet>
 
 Expect answer `3`, **two model calls**, **one tool attempt**, **one execution**,
 zero tool errors and status `completed`. Token counts are unknown, not zero:
@@ -51,11 +49,9 @@ Count `tool_result` blocks only when `is_error` is exactly `False`.
 - A list can contain text, calls or results. Do not count `tool_use` requests.
 - One message may contain several results; a failed attempt is not a success.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab01_loop --check
 ````
-</augment_code_snippet>
 
 The starter returns zero, so it should fail until you implement it. A complete
 solution passes four checks, including an empty conversation and mixed blocks.
@@ -71,11 +67,9 @@ solution passes four checks, including an empty conversation and mixed blocks.
 Read `count_successful_tools` in [solutions.py](solutions.py) after trying it.
 To verify the reference without overwriting your edits:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab01_loop --solution --check
 ````
-</augment_code_snippet>
 
 ## Explain it back
 

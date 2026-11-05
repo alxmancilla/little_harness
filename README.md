@@ -24,22 +24,18 @@ if you are new to running Python projects. Nothing needs to be installed with `p
 
 **First, watch a completed preview—no editing or reference solution required:**
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.preview
 ````
-</augment_code_snippet>
 
 Expect answer `3`, two model calls and one tool execution. Then open
 [Lab 0](lessons/00-from-functions-to-agents.md) and build the loop in five small
 checkpoints. Edit only `run_loop` in [lessons/exercises.py](lessons/exercises.py).
 **The first check intentionally fails until you implement that checkpoint:**
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab00_basics --check --stage 1
 ````
-</augment_code_snippet>
 
 Feedback stops at the first unfinished checkpoint and gives a hint and next command.
 Use the hints before selecting `--solution`; see [troubleshooting](LEARN.md#troubleshooting)
@@ -60,13 +56,11 @@ then add your own test. Earlier exercise files are separate and stay untouched.
 Use **Python 3.9+** and run commands from the repository root. A virtual environment
 is optional; there is nothing to install with `pip`.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m agents.teaching.cli mock
 python3 -m agents.teaching.cli rag-mock
 python3 -m examples.inventory_agent --sku WIDGET
 ````
-</augment_code_snippet>
 
 - **`mock`** calculates a value, timestamps it and writes a report in `workspace/`.
   Risky tools are explicitly auto-approved in this scripted demo.
@@ -107,12 +101,10 @@ create a workspace or register application tools.
 Configure a [provider](docs/REFERENCE.md#providers) and its credential locally, then run a task or
 start an interactive conversation. **These commands can incur API costs.**
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m agents.teaching.cli "What is 17 * 23 + 4?"
 python3 -m agents.teaching.cli
 ````
-</augment_code_snippet>
 
 Interactive mode resumes `session.json`. Type `exit` to leave; Ctrl+C during a task
 cancels that task, not its past effects. One-shot and scripted runs do not save or
@@ -129,7 +121,6 @@ for every route and setting.
 Supply a model callable, system prompt and explicit tool mapping. This complete
 example runs offline without application imports:
 
-<augment_code_snippet mode="EXCERPT">
 ````python
 from harness import Agent
 def model(system, messages, tools, on_text=None):
@@ -138,7 +129,6 @@ agent = Agent(model, "Be helpful.", tools={}, quiet=True)
 result = agent.run_result("Say hello.")
 print(result.to_dict())
 ````
-</augment_code_snippet>
 
 `tools={}` disables tools; omitting `tools` is an error for `harness.Agent`.
 `run()` returns display text. `run_result()` returns an immutable result containing
@@ -150,7 +140,6 @@ Inspect status as well as answer text: a retained answer does not imply completi
 Schemas come from parameter annotations and defaults; descriptions come from
 docstrings. Pass the resulting registry as `Agent(..., tools=tools)`.
 
-<augment_code_snippet mode="EXCERPT">
 ````python
 from harness import ToolRegistry
 tools = ToolRegistry()
@@ -159,7 +148,6 @@ def word_count(text: str) -> str:
     """Count words in supplied text."""
     return str(len(text.split()))
 ````
-</augment_code_snippet>
 
 Parameter types are `str`, `int`, `float` and `bool`. Use `Literal["asc", "desc"]`
 (all strings or all integers) for fixed choices, and `Annotated[str, "description"]`
@@ -186,13 +174,11 @@ To reuse the teaching tools with independent paths, use `TeachingConfig`,
 Follow [the application recipe](docs/BUILD_AN_AGENT.md) for an annotated loop-reading
 path, application-owned output validation and a realistic support assistant:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m examples.support_agent
 python3 -m examples.support_agent "warranty review" --sku GADGET
 python3 -m examples.support_agent "penguin migration"
 ````
-</augment_code_snippet>
 
 It combines approved local notes and product data, validates structured output and
 actual citation provenance, and escalates when evidence is missing. Offline runs
@@ -257,11 +243,9 @@ for trace content opt-ins and history-compaction behavior.
 Tests use the standard library and need no provider credentials or network calls.
 Run from the repository root:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m unittest -q
 ````
-</augment_code_snippet>
 
 Focused suites and installed-data checks are listed in the [test reference](docs/REFERENCE.md#tests).
 

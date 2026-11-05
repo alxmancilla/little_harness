@@ -11,11 +11,9 @@ Next: [diagnose a failure](03-diagnose-a-failure.md)
 The new task counts **distinct** words in `little harness little`. Predict the
 correct answer, then run the intentionally unfinished implementation:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab02_tools --messages
 ````
-</augment_code_snippet>
 
 The starter answers `3`, completes normally and reports zero tool errors.
 But the correct distinct count is **2**. The runtime validated execution—not
@@ -42,12 +40,10 @@ not allowed. The runtime supports a limited flat schema, not every JSON Schema f
 
 Registration in [lab01_loop.py](lab01_loop.py) is equivalent to:
 
-<augment_code_snippet mode="EXCERPT">
 ````python
 tools = ToolRegistry()
 tools.tool(read_only=True)(unique_word_count)
 ````
-</augment_code_snippet>
 
 `read_only=True` is trusted application metadata, not automatic verification of
 the function. Keep the tool pure: do not add filesystem/network access or side effects.
@@ -55,11 +51,9 @@ Annotations validate inputs; they do not prove the function returns the right an
 
 ## Check your implementation
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab02_tools --check
 ````
-</augment_code_snippet>
 
 The starter should fail the repeated-word cases and the agent's answer check.
 After your fix, expect eight passing checks, answer `2`, two model calls and one
@@ -76,11 +70,9 @@ case sensitivity, punctuation and the actual model/tool round trip.
 
 Read `unique_word_count` in [solutions.py](solutions.py), or compare its behavior:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m lessons.lab02_tools --solution --check
 ````
-</augment_code_snippet>
 
 ## Explain it back
 

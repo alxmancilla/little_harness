@@ -29,13 +29,11 @@ and message contract, see [the specification](HARNESS_SPEC.md#32-model-and-conve
 notes and looks up a product. Its data and policies are fictional, not real
 hardware instructions or warranties. It uses the same factory offline and live.
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m examples.support_agent
 python3 -m examples.support_agent "warranty review" --sku GADGET
 python3 -m examples.support_agent "penguin migration"
 ````
-</augment_code_snippet>
 
 The default run makes two scripted model calls and two read-only tool calls.
 The no-evidence request escalates with `needs_human=true`, not an invented answer.
@@ -51,12 +49,10 @@ without checking your provider and data-access policies.
 
 Inject a model instead of selecting one inside tools or runtime imports:
 
-<augment_code_snippet path="examples/support_agent.py" mode="EXCERPT">
 ````python
 from examples.support_agent import OfflineModel, PRODUCTS, create_agent, load_documents
 agent = create_agent(OfflineModel(), load_documents(), PRODUCTS)
 ````
-</augment_code_snippet>
 
 The factory takes fresh snapshots and defaults to six model calls, six tool
 attempts, 30 seconds, quiet output and a read-only policy. Its two module-level
@@ -87,13 +83,11 @@ The support application's `parse_recommendation` checks:
 
 The caller uses the returned validated value, never unchecked `result.answer`:
 
-<augment_code_snippet path="examples/support_agent.py" mode="EXCERPT">
 ````python
 task = json.dumps({"sku": "WIDGET", "question": "How do I reconnect?"})
 result = agent.run_result(task)
 recommendation = parse_recommendation(result, agent.messages, "WIDGET")
 ````
-</augment_code_snippet>
 
 Here `json` and `parse_recommendation` are imports in the application module.
 Invalid output raises an application error: there is no hidden repair call or
@@ -103,11 +97,9 @@ Use a fresh agent per independent request; keep histories and traces separate.
 
 ## Approve a draft, never send automatically
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 python3 -m examples.support_agent --save-draft support-draft.json
 ````
-</augment_code_snippet>
 
 Only after output validation does host code show the complete draft and ask for
 approval. The draft approval callback must return literal `True`; strings, numbers
@@ -138,13 +130,11 @@ can also disclose information; none of these flags is general secret redaction.
 Copy the complete `harness/` directory into your project; no installation is required.
 For optional installation, build a pure-Python wheel with the standard library:
 
-<augment_code_snippet mode="EXCERPT">
 ````sh
 package_dir=$(mktemp -d)
 python3 -m tools.package_runtime --output "$package_dir"
 python3 -m pip install --no-index --no-deps "$package_dir/little_harness-0.1.0-py3-none-any.whl"
 ````
-</augment_code_snippet>
 
 Use your own virtual environment for installation. The builder packages only runtime
 Python source and wheel metadata, records file hashes and refuses overwrites. It

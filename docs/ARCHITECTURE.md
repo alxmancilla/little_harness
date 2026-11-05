@@ -23,7 +23,6 @@ Solid arrows indicate calls/data flow; dotted arrows show optional controls or
 observations. The full diagram includes process and storage boundaries:
 [editable Mermaid source](architecture.mmd).
 
-<augment_code_snippet mode="EXCERPT">
 ````mermaid
 flowchart LR
     App["CLI adapter / application"] --> Agent["Agent - harness/agent.py"]
@@ -33,7 +32,6 @@ flowchart LR
     Agent --> Session[("Session JSON")]; Agent --> Trace[("Trace JSONL")]
     Gates --> Journal[("Optional SQLite journal")]; Agent --> Events["Optional RunEvent callback"]
 ````
-</augment_code_snippet>
 
 This overview compresses execution ordering; use the detailed source and sequence
 view below for the journal commit-before-invocation requirement.
@@ -142,7 +140,6 @@ a fresh worker process per question. The single-agent worker creates one restric
 agent. The multi-agent worker runs researcher then reviewer sequentially in the
 **same question worker**, with separate histories and a bounded untrusted handoff.
 
-<augment_code_snippet mode="EXCERPT">
 ````mermaid
 flowchart LR
     Data["Prepared HotpotQA"] --> Host["evaluation/hotpotqa/evaluate.py"]
@@ -152,7 +149,6 @@ flowchart LR
     Single --> Result["Prediction and usage"]; Reviewer --> Result
     Result --> Score["Host scoring / comparison"]; Data -->|"gold labels"| Score
 ````
-</augment_code_snippet>
 
 | Module | Role |
 | --- | --- |
