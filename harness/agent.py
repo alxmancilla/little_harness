@@ -70,6 +70,39 @@ def _size(obj):
     return len(json.dumps(obj))
 
 
+def _check_response(response):
+    """Reject malformed model responses before history changes; other block types pass through.
+
+    A tool_use input of the wrong shape is not checked here: argument validation returns it
+    to the model as a recoverable tool error.
+    """
+    def bad(problem):
+        raise ModelError(f"malformed model response: {problem}", "malformed_response")
+
+    if not isinstance(response, dict):
+        bad("expected a dict")
+    content = response.get("content")
+    if not isinstance(content, list):
+        bad("content must be a list")
+    if response.get("stop_reason") is not None and type(response["stop_reason"]) is not str:
+        bad("stop_reason must be a string or None")
+    truncated = response.get("truncated_tool_ids")
+    if truncated is not None and not isinstance(truncated, (list, tuple)):
+        bad("truncated_tool_ids must be a list")
+    ids = set()
+    for block in content:
+        if not isinstance(block, dict) or type(block.get("type")) is not str:
+            bad("each content block must be a dict with a string type")
+        if block["type"] == "text" and type(block.get("text")) is not str:
+            bad("text blocks need string text")
+        if block["type"] == "tool_use":
+            if type(block.get("id")) is not str or not block["id"] or block["id"] in ids:
+                bad("tool_use blocks need a unique nonempty string id")
+            if type(block.get("name")) is not str:
+                bad("tool_use blocks need a string name")
+            ids.add(block["id"])
+
+
 def render_transcript(messages, clip=1000):
     """Flatten/clamp content for summaries while preserving tool/result labels."""
     lines = []
@@ -228,6 +261,7 @@ class Agent:
             if self._budget is not None and self.on_event is not None:
                 self._budget.check("work")
             response = self.model(*args, **kwargs)
+            _check_response(response)
         except BaseException as error:
             if self._budget is not None:
                 self._budget.record_model_usage(None)

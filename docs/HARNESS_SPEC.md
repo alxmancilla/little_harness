@@ -127,6 +127,16 @@ A normalized response contains `content`, `stop_reason`, optional `usage` with
 `input_tokens`/`output_tokens`, and optional `truncated_tool_ids`. Missing usage is
 unknown, not zero. Stream deltas are not themselves a final answer.
 
+Every response from any model callable, including scripted ones, MUST pass one shape
+check before history changes: a dict whose `content` is a list of dicts with a string
+`type`; `text` blocks with string `text`; `tool_use` blocks with a unique nonempty
+string `id` and a string `name`; a string or missing `stop_reason`; and a list for
+`truncated_tool_ids` when present. A failure raises `ModelError` with category
+`malformed_response`: a main call stops as `model_error`, a summary call fails
+compaction, and nothing is appended. Other block types (for example provider
+`thinking` blocks) pass through unchanged. A `tool_use` input of the wrong shape is
+not a malformed response; argument validation returns it to the model as a tool error.
+
 ### 3.3 Results, observations and outcomes
 
 | Record | Fields |

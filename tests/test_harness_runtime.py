@@ -57,6 +57,46 @@ class RuntimeTests(f.HarnessTestCase):
         self.assertEqual([(d["status"], d["error_category"]) for d in finished], [("failed", "rate_limited")])
         self.assertNotIn("private-provider-text", self.trace.read_text() + repr([e.data for e in events]))
 
+    def test_malformed_responses_end_as_model_errors_without_changing_history(self):
+        session = self.dir / "session.json"
+        cases = {"expected a dict": "text", "content must be a list": {"stop_reason": "end_turn"},
+                 "string type": {"content": [{"text": "no type"}]},
+                 "string text": {"content": [{"type": "text", "text": 5}]},
+                 "unique nonempty string id": {"content": [{"type": "tool_use", "name": "x", "input": {}}]},
+                 "string name": {"content": [{"type": "tool_use", "id": "a", "input": {}}]},
+                 "stop_reason": {"stop_reason": 1, "content": []},
+                 "truncated_tool_ids": {"content": [], "truncated_tool_ids": "a"}}
+        duplicate = {"type": "tool_use", "id": "same", "name": "current_time", "input": {}}
+        cases["unique nonempty string id "] = {"content": [duplicate, dict(duplicate)]}
+        for problem, response in cases.items():
+            with self.subTest(problem=problem):
+                session.unlink(missing_ok=True)
+                events = []
+                agent = self.agent(f.RecordingModel(response), session_path=session, on_event=events.append)
+                result = agent.run_result("go")
+                self.assertEqual((result.status, result.stop_reason), ("model_error", "model_error"))
+                self.assertIn("malformed model response", result.text)
+                self.assertIn(problem.strip(), result.text)
+                self.assertEqual(f.saved_messages(session), [{"role": "user", "content": "go"}])
+                finished = [e.data for e in events if e.kind == "model_finished"]
+                self.assertEqual(finished[-1]["error_category"], "malformed_response")
+
+    def test_other_block_types_and_wrong_argument_shapes_still_pass_the_response_check(self):
+        thinking = {"stop_reason": "max_tokens", "content": [{"type": "thinking", "thinking": "...", "signature": "s"}]}
+        result = self.agent(f.RecordingModel(thinking)).run_result("go")
+        self.assertEqual(result.status, "max_tokens")
+        bad_args = f.tool_calls(("a", "current_time", []))
+        result = self.agent(f.RecordingModel(bad_args, f.reply("done"))).run_result("go")
+        self.assertEqual((result.status, result.usage.tool_errors), ("completed", 1))
+
+    def test_malformed_summary_keeps_history_and_the_task_continues(self):
+        agent = self.agent(f.RecordingModel({"content": "not a list"}, f.reply("answer")), compact_at=1500)
+        agent.messages = f.compaction_history()
+        self.assertEqual(agent.run("continue"), "answer")
+        self.assertEqual(agent.messages[:10], f.compaction_history()[:10])
+        failed = [r for r in self.trace_records() if r["kind"] == "compact_failed"]
+        self.assertEqual([r["category"] for r in failed], ["malformed_response"])
+
     def test_step_exhaustion_has_structured_and_display_results(self):
         result = self.agent([f.tool_calls(("a", "current_time", {}))], max_steps=1).run_result("go")
         self.assertEqual((result.status, result.stop_reason), ("stopped", "max_steps"))
