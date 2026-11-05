@@ -4,6 +4,7 @@ import ast
 import json
 import operator
 import re
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -84,13 +85,28 @@ def write_file(context, path: str, content: str) -> str:
     return f"wrote {len(content)} characters to {path}"
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Approval covers one URL, so a redirect elsewhere must not be followed silently."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def http_get(context, url: str) -> str:
     """Fetch an http(s) URL with a GET request and return the response body as text.
-    Requires human approval."""
+    Redirects are not followed. Requires human approval."""
     if not url.startswith(("http://", "https://")):
         raise ValueError("only http:// and https:// URLs are allowed")
-    with urllib.request.urlopen(url, timeout=30) as resp:
-        return resp.read(context["max_tool_output"] + 1).decode("utf-8", errors="replace")
+    try:
+        with urllib.request.build_opener(_NoRedirects()).open(url, timeout=30) as resp:
+            return resp.read(context["max_tool_output"] + 1).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as error:
+        if not 300 <= error.code < 400:
+            raise
+        location = (error.headers.get("Location") or "")[:500]
+        error.close()
+        raise ValueError(f"redirect ({error.code}) was not followed; request the new URL "
+                         f"separately if it is needed: {location}") from None
 
 
 def _search_terms(text):

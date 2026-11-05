@@ -1,11 +1,13 @@
 """Harness and provider integration tests. Run with python3 -m unittest -v."""
 
+import http.server
 import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import urllib.error
 import urllib.response
@@ -69,6 +71,38 @@ class ToolTests(HarnessTestCase):
     def test_http_get_rejects_non_http_schemes(self):
         with self.assertRaisesRegex(ValueError, "only http"):
             self.tools["http_get"]["fn"]("file:///etc/passwd")
+
+    def test_http_get_reads_a_response_but_never_follows_a_redirect(self):
+        requested = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requested.append(self.path)
+                if self.path == "/start":
+                    self.send_response(302)
+                    self.send_header("Location", "/target")
+                    self.end_headers()
+                    return
+                body = b"BODY " + self.path.encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        self.assertEqual(self.tools["http_get"]["fn"](f"{base}/ok"), "BODY /ok")
+        with self.assertRaisesRegex(ValueError, r"redirect \(302\) was not followed.*/target"):
+            self.tools["http_get"]["fn"](f"{base}/start")
+        self.assertEqual(requested, ["/ok", "/start"])
 
 
 class RetrievalTests(HarnessTestCase):

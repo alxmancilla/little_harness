@@ -284,8 +284,9 @@ Completions using standard-library HTTP/SSE. Model HTTP redirects MUST be reject
 including same-origin redirects. HTTP error bodies MUST close without being read;
 provider diagnostic/stream errors MUST not be interpolated into normal error text.
 Selected connection/HTTP failures MAY retry before streaming; interrupted streams MUST
-fail rather than retry and duplicate output. These protections apply to model transport,
-not the separate built-in `http_get` tool.
+fail rather than retry and duplicate output. These protections apply to model transport.
+The separate teaching `http_get` tool also rejects redirects, so approval covers the
+only URL it fetches; it does not otherwise restrict hosts or addresses.
 Every adapter MUST raise `ModelError(message, category)` with one fixed category:
 `rate_limited` (429), `auth` (401/403), `request_rejected` (other 4xx and 3xx),
 `server_error` (5xx), `network`, `malformed_response`, `incomplete_response` or

@@ -140,7 +140,7 @@ built in. Live `write_file` and `http_get` requests require approval by default.
 | `current_time` | UTC timestamp |
 | `list_files`, `read_file` | Workspace-relative file access with escape checks |
 | `write_file` | Create or overwrite a workspace file; risky |
-| `http_get` | Fetch an HTTP(S) response as text; risky |
+| `http_get` | Fetch an HTTP(S) response as text; risky. Redirects are not followed: the model must request, and a person approve, the new URL |
 | `search_documents` | Bounded keyword retrieval with passage source IDs |
 
 **Retrieval-augmented generation (RAG)** supplies external evidence before an answer.
