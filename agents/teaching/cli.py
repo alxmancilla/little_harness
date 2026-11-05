@@ -3,7 +3,7 @@
 import os
 import sys
 
-from harness import RunLimits, ToolPolicy, make_model
+from harness import ModelConfigError, RunLimits, SessionLoadError, ToolPolicy, make_model
 from harness.model_clients import print_model_config
 from harness.tool_execution import validate_tool_timeout
 
@@ -53,14 +53,20 @@ def main():
         print("\n=== FINAL ===\n" + agent.run("Compute 17*23+4, timestamp it, and save a report."))
         return
 
-    model = make_model()
+    try:
+        model = make_model()
+    except ModelConfigError as error:
+        sys.exit(f"{error}. For an offline demo, run: python3 -m agents.teaching.cli mock")
     print_model_config(model)
     if args:
         agent = agent_factory(model, SYSTEM_PROMPT, **options)
         print("\n=== FINAL ===\n" + agent.run(" ".join(args)))
         return
-    agent = agent_factory(model, SYSTEM_PROMPT,
-                          session_path=os.environ.get("HARNESS_SESSION", "session.json"), **options)
+    try:
+        agent = agent_factory(model, SYSTEM_PROMPT,
+                              session_path=os.environ.get("HARNESS_SESSION", "session.json"), **options)
+    except SessionLoadError as error:
+        sys.exit(str(error))
     print("Interactive mode. The agent remembers the conversation. Ctrl+C or 'exit' to quit.")
     while True:
         try:

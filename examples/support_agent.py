@@ -10,7 +10,7 @@ import re
 from functools import partial
 from pathlib import Path
 
-from harness import Agent, RunLimits, ToolPolicy, ToolRegistry, make_model
+from harness import Agent, ModelConfigError, RunLimits, ToolPolicy, ToolRegistry, make_model
 
 
 PRODUCTS = {"WIDGET": {"name": "Aurora Widget", "warranty_months": 12},
@@ -202,6 +202,9 @@ def main():
                           "usage": result.to_dict()["usage"]}, ensure_ascii=False, indent=2))
         if args.save_draft:
             print("Draft saved." if save_draft(args.save_draft, value, _approve_draft) else "Draft not saved.")
+    except ModelConfigError as error:
+        print(f"Live model configuration is incomplete: {error}")
+        return 1
     except (ValueError, OSError):
         print("Support request failed validation or local file access; no draft was sent.")
         return 1

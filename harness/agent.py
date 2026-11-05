@@ -20,6 +20,10 @@ from .policy import PolicyDecision, ToolPolicy
 from .tools import validate_tool_input
 
 
+class SessionLoadError(ValueError):
+    """The session file exists but is not a valid session; it is left unchanged."""
+
+
 @dataclass(frozen=True)
 class ToolCallOutcome:
     """Result of one tool request; execution is recorded for timed/journaled or denied actions."""
@@ -265,7 +269,8 @@ class Agent:
                     raise ValueError("invalid compaction state")
                 self._context_start, self._context_summary = start, summary
         except ValueError as e:
-            sys.exit(f"{self.session_path} is not a valid session ({e}); fix or delete it to start fresh")
+            raise SessionLoadError(f"{self.session_path} is not a valid session ({e}); "
+                                   "fix or delete it to start fresh") from None
         self._print(f"Resumed {len(messages)} messages from {self.session_path}")
         return messages
 

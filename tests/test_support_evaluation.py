@@ -8,7 +8,7 @@ from unittest import mock
 
 from examples import support_agent as app
 from evaluation.support import dataset as data, evaluate as e, multiturn as mt
-from harness import ModelError, RunLimits
+from harness import ModelConfigError, ModelError, RunLimits
 from tests.helpers import Model, REPO, RecordingModel, TemporaryDirectoryTestCase, reply, tool_calls, used
 
 
@@ -191,7 +191,7 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         self.assertFalse((self.root / "run").exists())
 
     def test_live_model_configuration_exit_is_sanitized_before_output_creation(self):
-        with mock.patch.object(e, "make_model", side_effect=SystemExit("config-sentinel")):
+        with mock.patch.object(e, "make_model", side_effect=ModelConfigError("config-sentinel")):
             with self.assertRaisesRegex(ValueError, "configuration") as error:
                 self.run_eval(live=True)
         self.assertNotIn("config-sentinel", str(error.exception))

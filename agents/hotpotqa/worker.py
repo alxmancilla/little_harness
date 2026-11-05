@@ -36,7 +36,10 @@ def worker_main(description, runner, smoke_model, prompts, *, argv=None):
     args = parser.parse_args(argv)
     load_env()
     config = HotpotQAConfig.from_env(os.environ)
-    model = h.make_model() if args.live else smoke_model
+    try:
+        model = h.make_model() if args.live else smoke_model
+    except h.ModelConfigError as error:
+        parser.exit(1, f"{error}\n")
     if args.live:
         model.max_tokens = args.max_output_tokens
         print_model_config(model)

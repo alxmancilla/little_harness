@@ -414,10 +414,12 @@ class SessionTests(HarnessTestCase):
         self.assertEqual(model.calls[0], [{"role": "user", "content": [
             {"type": "text", "text": "unfinished"}, {"type": "text", "text": "new"}]}])
 
-    def test_invalid_session_file_exits_without_overwriting(self):
+    def test_invalid_session_file_raises_without_overwriting_or_exiting(self):
         self.session.write_text("{not json")
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(h.SessionLoadError) as caught:
             self.agent([], session_path=self.session)
+        self.assertIsInstance(caught.exception, ValueError)
+        self.assertIn("is not a valid session", str(caught.exception))
         self.assertEqual(self.session.read_text(), "{not json")
 
 
@@ -491,7 +493,7 @@ class CompactionTests(HarnessTestCase):
                      {"version": 2, "messages": messages, "compaction": "s"}):
             with self.subTest(data=data):
                 session.write_text(json.dumps(data))
-                with self.assertRaises(SystemExit):
+                with self.assertRaises(h.SessionLoadError):
                     self.agent([], session_path=session)
                 self.assertEqual(json.loads(session.read_text()), data)
 
@@ -1130,12 +1132,24 @@ class MakeModelTests(unittest.TestCase):
         model = clients.make_model({"HARNESS_PROVIDER": "gateway", "HARNESS_API_KEY_ENV": "MY_KEY", "MY_KEY": "k"})
         self.assertEqual(model.key, "k")
 
-    def test_configuration_errors_exit(self):
+    def test_configuration_errors_raise_instead_of_exiting(self):
         for env, message in [({}, "ANTHROPIC_API_KEY"),
                              ({"HARNESS_PROVIDER": "nope"}, "Unknown HARNESS_PROVIDER"),
                              ({"HARNESS_PROVIDER": "openai", "OPENAI_API_KEY": "k"}, "HARNESS_MODEL")]:
-            with self.subTest(env=env), self.assertRaisesRegex(SystemExit, message):
+            with self.subTest(env=env), self.assertRaisesRegex(clients.ModelConfigError, message) as caught:
                 clients.make_model(env)
+            self.assertIsInstance(caught.exception, ValueError)
+            self.assertNotIn("agents.teaching", str(caught.exception))
+
+    def test_cli_reports_configuration_errors_with_the_offline_hint(self):
+        env = {"PATH": os.defpath, "PYTHONPATH": str(REPO)}
+        with tempfile.TemporaryDirectory() as directory:
+            child = subprocess.run([sys.executable, "-B", "-m", "agents.teaching.cli", "hello"], cwd=directory,
+                                   env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(child.returncode, 1)
+        self.assertIn("ANTHROPIC_API_KEY", child.stderr)
+        self.assertIn("python3 -m agents.teaching.cli mock", child.stderr)
+        self.assertNotIn("Traceback", child.stderr)
 
 
 if __name__ == "__main__":

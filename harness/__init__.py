@@ -3,14 +3,14 @@
 from .journal import ExecutionJournal, JournalError, JournalRecoveryRequired
 from .events import RunEvent
 from .runtime import RunLimits, RunResult, RunUsage
-from .model_clients import (AnthropicModel, HTTPModel, ModelError, OpenAIChatModel,
+from .model_clients import (AnthropicModel, HTTPModel, ModelConfigError, ModelError, OpenAIChatModel,
                             OpenAIResponsesModel, make_model)
 from .policy import ToolPolicy
 
-from .agent import Agent
+from .agent import Agent, SessionLoadError
 from .tools import ToolRegistry, validate_tool_input
 
-__all__ = ["Agent", "ToolRegistry", "RunLimits", "RunResult", "RunUsage", "RunEvent",
+__all__ = ["Agent", "SessionLoadError", "ToolRegistry", "RunLimits", "RunResult", "RunUsage", "RunEvent",
            "ToolPolicy", "ExecutionJournal", "JournalError", "JournalRecoveryRequired",
-           "HTTPModel", "ModelError", "AnthropicModel", "OpenAIChatModel", "OpenAIResponsesModel",
-           "make_model", "validate_tool_input"]
+           "HTTPModel", "ModelError", "ModelConfigError", "AnthropicModel", "OpenAIChatModel",
+           "OpenAIResponsesModel", "make_model", "validate_tool_input"]

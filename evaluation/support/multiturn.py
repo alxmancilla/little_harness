@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from examples import support_agent as app
-from harness import RunLimits, make_model
+from harness import ModelConfigError, RunLimits, make_model
 
 from .dataset import load_scenarios
 from .evaluate import json_bytes, model_fingerprint, write_json
@@ -93,7 +93,7 @@ def run_evaluation(output, *, live=False, limits=None, model_factory=None):
     factory = model_factory if model_factory is not None else (make_model if live else app.OfflineModel)
     try:
         first_model = factory()
-    except SystemExit:
+    except ModelConfigError:
         raise ValueError("invalid live model configuration") from None
     repo = Path(__file__).resolve().parents[2]
     sources = [*sorted((repo / "harness").glob("*.py")), repo / "examples/support_agent.py",

@@ -7,7 +7,6 @@ This module does not import the agent loop, load .env or create workspace files.
 import http.client
 import json
 import os
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -48,6 +47,10 @@ class ModelError(Exception):
             raise ValueError(f"unknown ModelError category: {category}")
         super().__init__(message)
         self.category = category
+
+
+class ModelConfigError(ValueError):
+    """make_model() could not select a provider, credential or model; nothing was sent."""
 
 
 def _http_category(code):
@@ -390,21 +393,22 @@ PROVIDERS = {
 
 def make_model(env=os.environ):
     """Build the model client from HARNESS_PROVIDER, HARNESS_MODEL, HARNESS_BASE_URL and
-    HARNESS_API_KEY_ENV (the *name* of the variable holding the key, so the key never sits in config)."""
+    HARNESS_API_KEY_ENV (the *name* of the variable holding the key, so the key never sits in config).
+    Raises ModelConfigError instead of exiting; command-line callers decide how to report it."""
     name = env.get("HARNESS_PROVIDER", "anthropic")
     if name == "gateway":                                    # claude-* -> Anthropic route, anything else -> OpenAI
         model = env.get("HARNESS_MODEL") or PROVIDERS["gateway-openai"][3]
         name = "gateway-anthropic" if model.startswith("claude") else "gateway-openai"
     if name not in PROVIDERS:
-        sys.exit(f"Unknown HARNESS_PROVIDER '{name}'. Choose one of: gateway, {', '.join(PROVIDERS)}")
+        raise ModelConfigError(f"Unknown HARNESS_PROVIDER '{name}'. Choose one of: gateway, {', '.join(PROVIDERS)}")
     cls, base_url, key_var, model, key_header = PROVIDERS[name]
     key_var = env.get("HARNESS_API_KEY_ENV") or key_var
     key = env.get(key_var)
     model = env.get("HARNESS_MODEL") or model
     if not key and not env.get("HARNESS_BASE_URL"):         # a custom URL may be a local server without auth
-        sys.exit(f"Set {key_var} for provider '{name}', or run: python3 -m agents.teaching.cli mock")
+        raise ModelConfigError(f"Set {key_var} for provider '{name}', or set HARNESS_BASE_URL for a local server")
     if not model:
-        sys.exit(f"Set HARNESS_MODEL: provider '{name}' has no default model")
+        raise ModelConfigError(f"Set HARNESS_MODEL: provider '{name}' has no default model")
     client = cls(model, key=key, base_url=env.get("HARNESS_BASE_URL") or base_url, key_header=key_header)
     client.provider = name                           # resolved route, not just the "gateway" alias
     return client

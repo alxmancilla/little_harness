@@ -6,7 +6,9 @@ reference. Start with the [README](../README.md) for an overview and quick start
 ## Providers
 
 `harness.make_model()` selects a streaming client using the environment. Adapters
-normalize provider responses into one model/tool message format.
+normalize provider responses into one model/tool message format. An unknown
+provider, missing credential or missing model raises `harness.ModelConfigError`
+before any request; the bundled command-line tools print its message and exit with code 1.
 
 | `HARNESS_PROVIDER` | API | Credential variable |
 | --- | --- | --- |

@@ -92,11 +92,16 @@ and are not automatically redacted. Do not put secrets in them.
 
 Supported embedding surface (validated by teaching, HotpotQA and inventory clients):
 
-- Import `Agent`, `ToolRegistry`, `RunLimits`, `RunResult`, `RunUsage`, `RunEvent`
-  and `ToolPolicy` from `harness`; use the documented constructor options and hooks.
-- Public provider exports are `HTTPModel`, `ModelError`, `AnthropicModel`,
-  `OpenAIChatModel`, `OpenAIResponsesModel` and `make_model`. Provider selection is
-  explicit; importing the package does not load `.env` or select a provider.
+- Import `Agent`, `SessionLoadError`, `ToolRegistry`, `RunLimits`, `RunResult`,
+  `RunUsage`, `RunEvent` and `ToolPolicy` from `harness`; use the documented
+  constructor options and hooks.
+- Public provider exports are `HTTPModel`, `ModelError`, `ModelConfigError`,
+  `AnthropicModel`, `OpenAIChatModel`, `OpenAIResponsesModel` and `make_model`.
+  Provider selection is explicit; importing the package does not load `.env` or
+  select a provider.
+- The runtime never terminates the host process. Configuration and session problems
+  raise `ModelConfigError` or `SessionLoadError`, both subclasses of `ValueError`;
+  command-line applications catch them and choose the exit message and code.
 - Recovery exports are `ExecutionJournal`, `JournalError` and
   `JournalRecoveryRequired`; `validate_tool_input` is also public.
 - Private methods and internal worker descriptors are implementation details,
@@ -236,8 +241,9 @@ also flush/fsync before run closure, including the directory on POSIX. A session
 `{"version": 2, "messages": [...], "compaction": null | {"start": n, "summary": "..."}}`;
 a legacy JSON list of messages still loads, without compaction state, and is
 rewritten in version 2 on the next save. Invalid JSON, an unknown version, a
-non-list `messages` or invalid compaction state MUST stop loading rather than be
-overwritten. Session history alone MUST NOT be treated as proof of action completion.
+non-list `messages` or invalid compaction state MUST raise `SessionLoadError` from
+`Agent(...)` and leave the file unchanged. Session history alone MUST NOT be treated
+as proof of action completion.
 
 ### FR-10 — Compact context without splitting tool exchanges
 
