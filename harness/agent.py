@@ -147,12 +147,16 @@ class Agent:
         self.trace_path = Path(trace_path)
         self.compact_at = compact_at
         self.session_path = Path(session_path) if session_path else None
+        # Append-only record of messages that compaction replaced; sessions only.
+        self.compaction_archive_path = (self.session_path.with_name(self.session_path.name + ".compacted.jsonl")
+                                        if self.session_path is not None else None)
         self.journal = ExecutionJournal(journal_path) if journal_path is not None else None
         if self.journal is not None:
             reserved = {self.trace_path.resolve()}
             if self.session_path is not None:
                 reserved.update((self.session_path.resolve(),
-                                 self.session_path.with_name(self.session_path.name + ".tmp").resolve()))
+                                 self.session_path.with_name(self.session_path.name + ".tmp").resolve(),
+                                 self.compaction_archive_path.resolve()))
             journal_files = {Path(str(self.journal.path) + suffix)
                              for suffix in ("", "-journal", "-wal", "-shm")}
             if (any(path.is_relative_to(root) for path in journal_files for root in self.writable_roots)
@@ -288,8 +292,8 @@ class Agent:
             cut = next((i for i in reversed(assistants) if 2 <= i < len(self.messages)), None)
         if cut is None:
             return
-        token_fields = {"estimated_tokens_before": size} if self.compact_at_tokens is not None else {}
-        self._emit("compaction_started", chars_before=chars, **token_fields)
+        extra_fields = {"estimated_tokens_before": size} if self.compact_at_tokens is not None else {}
+        self._emit("compaction_started", chars_before=chars, **extra_fields)
         try:
             summary = self._call_model(SUMMARY_SYSTEM,
                                       [{"role": "user", "content": render_transcript(self.messages[:cut])}], [],
@@ -311,6 +315,15 @@ class Agent:
         if not text:
             self._emit("compaction_finished", status="empty")
             return
+        try:
+            archived = self._archive_compacted(step, self.messages[:cut], text)
+        except OSError as e:
+            self._trace("compact_failed", step=step, reason="archive_unavailable",
+                        content_fields={"error": str(e)})
+            self._emit("compaction_finished", status="failed")
+            return
+        if archived:
+            extra_fields["archived"] = True
         self.messages[:cut] = [{"role": "user", "content":
                                 "[Summary of the earlier conversation, compacted to save context. "
                                 "Not a new request.]\n" + text}]
@@ -321,13 +334,26 @@ class Agent:
             self._size_after_compact = chars_after
         else:
             self._size_after_compact = self._estimated_tokens(chars_after)
-            token_fields["estimated_tokens_after"] = self._size_after_compact
+            extra_fields["estimated_tokens_after"] = self._size_after_compact
         self._print(f"[step {step}] 🗜  compacted {cut} messages into a summary "
                     f"({chars} -> {chars_after} chars)")
         self._trace("compact", step=step, dropped=cut, chars_before=chars, chars_after=chars_after,
-                    **token_fields, content_fields={"summary": text}, usage=summary.get("usage"))
+                    **extra_fields, content_fields={"summary": text}, usage=summary.get("usage"))
         self._emit("compaction_finished", status="completed", dropped=cut, chars_before=chars,
-                   chars_after=chars_after, **token_fields, content={"summary": text})
+                   chars_after=chars_after, **extra_fields, content={"summary": text})
+
+    def _archive_compacted(self, step, messages, summary):
+        """Append replaced messages before the session drops them; return whether a record was written."""
+        if self.compaction_archive_path is None:
+            return False
+        record = {"ts": datetime.now(timezone.utc).isoformat(), "step": step, "dropped": len(messages),
+                  "summary": summary, "messages": messages}
+        with self.compaction_archive_path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record) + "\n")
+            if self.journal is not None:
+                stream.flush()
+                os.fsync(stream.fileno())
+        return True
 
     def _trace(self, kind, *, content_fields=None, **data):
         """Separate runtime metadata from opt-in conversation and error content."""

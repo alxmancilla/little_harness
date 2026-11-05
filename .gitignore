@@ -9,6 +9,7 @@ inventory-trace.jsonl
 support-trace.jsonl
 *.json
 *.json.tmp
+*.json.compacted.jsonl
 workspace/
 runs/
 execution.sqlite3

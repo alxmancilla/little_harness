@@ -455,6 +455,47 @@ class CompactionTests(HarnessTestCase):
                 self.assertEqual(agent.messages, self.history())
         self.assertIn("compact_failed", [r["kind"] for r in self.trace_records()])
 
+    def test_session_compaction_appends_replaced_messages_before_dropping_them(self):
+        session = self.dir / "session.json"
+        agent = self.agent(RecordingModel(reply("FIRST"), reply("SECOND")), compact_at=1500, session_path=session)
+        archive = agent.compaction_archive_path
+        self.assertEqual(archive, self.dir / "session.json.compacted.jsonl")
+        original = self.history()
+        agent.messages = self.history()
+        agent._compact(step=1)
+        agent._save()
+        records = [json.loads(line) for line in archive.read_text().splitlines()]
+        self.assertEqual(len(records), 1)
+        dropped = records[0]["dropped"]
+        self.assertEqual(records[0]["messages"], original[:dropped])
+        self.assertEqual(records[0]["summary"], "FIRST")
+        self.assertEqual(json.loads(session.read_text())[1:], original[dropped:])
+        self.assertTrue(self.trace_records()[-1]["archived"])
+        agent.messages += self.history()[1:]
+        agent._compact(step=2)
+        self.assertEqual([json.loads(line)["summary"] for line in archive.read_text().splitlines()],
+                         ["FIRST", "SECOND"])
+        with self.assertRaisesRegex(ValueError, "journal"):
+            self.agent([], session_path=session, journal_path=archive)
+
+    def test_compaction_without_session_writes_no_archive(self):
+        agent = self.agent(RecordingModel(reply("SUMMARY")), compact_at=1500)
+        self.assertIsNone(agent.compaction_archive_path)
+        agent.messages = self.history()
+        agent._compact(step=1)
+        self.assertNotIn("archived", self.trace_records()[-1])
+        self.assertEqual(sorted(path.name for path in self.dir.glob("*.compacted.jsonl")), [])
+
+    def test_unwritable_archive_keeps_history_and_reports_failure(self):
+        session = self.dir / "session.json"
+        agent = self.agent(RecordingModel(reply("SUMMARY")), compact_at=1500, session_path=session)
+        agent.compaction_archive_path.mkdir()
+        agent.messages = self.history()
+        agent._compact(step=1)
+        self.assertEqual(agent.messages, self.history())
+        record = self.trace_records()[-1]
+        self.assertEqual((record["kind"], record["reason"]), ("compact_failed", "archive_unavailable"))
+
     def test_token_threshold_without_usage_estimates_from_characters(self):
         chars = h._size(self.history())
         tokens = chars // h.CHARS_PER_TOKEN

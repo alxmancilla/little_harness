@@ -246,6 +246,11 @@ unknown or the history was just compacted. It is an estimate, not a tokenizer co
 It MUST avoid repeated compaction without sufficient history growth.
 Empty summaries or expected summarizer failures MUST retain history; summary calls
 still consume the shared budget. Summaries are lossy context, not durable action records.
+With a session, the agent MUST first append the messages it will replace, with the
+summary, to `<session>.compacted.jsonl` (one JSON record per compaction, fsynced when
+journaling). If that append fails, history MUST be retained. The archive is a
+content-bearing review record, never loaded back into context or replayed; compaction
+after an interruption may append a duplicate record. Without a session, nothing is archived.
 
 ### FR-11 — Provide safe, ordered observations
 
@@ -383,8 +388,8 @@ journal across restarts; switching/removing it bypasses recovery protection.
 Read-only tools can disclose data. Workers inherit credentials, filesystem and
 network access. Predicates, callbacks, approval and inline tools can block indefinitely;
 task deadlines cannot preempt them. Worker cleanup cannot undo remote work or guarantee
-termination of detached descendants. Content-enabled traces, sessions, results and
-ordinary inline tool errors may contain sensitive data. Metadata-only traces/events
+termination of detached descendants. Content-enabled traces, sessions, compaction
+archives, results and ordinary inline tool errors may contain sensitive data. Metadata-only traces/events
 minimize content, but IDs, names and caller annotations can still disclose information.
 There is no automatic retention, encryption or general redaction layer.
 
