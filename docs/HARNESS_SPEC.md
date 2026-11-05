@@ -65,6 +65,7 @@ is an execution boundary for timeouts, **not** a security boundary.
 | `ToolPolicy(read_only=False, argument_checks={})` | Optional explicit read-only gate and per-tool predicates |
 | `on_event(event)` | Optional synchronous observation; return value cannot authorize execution |
 | `tool_admission(name, available)` | Optional trusted per-attempt admission; `None` continues normal checks, nonempty string rejects only that call |
+| `get_steering()` | Optional; called after each saved tool batch that passed the budget check. Nonempty text is appended as a text block to that user turn and saved before the next model call; `None`/blank adds nothing; other values raise `ValueError`. It is guidance, not authorization |
 | `trace_context={...}` | Optional JSON trace annotations, copied at construction; reserved `ts`, `kind`, `run_id` keys rejected |
 | `trace_include_content=False` | Metadata-only JSONL by default; `True` includes tasks/model/tool/summary/error content independently of events |
 | `ExecutionJournal.inspect()` / `resolve(...)` | Offline inspection and explicitly confirmed human outcome recording |

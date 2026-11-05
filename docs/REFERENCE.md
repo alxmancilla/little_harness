@@ -73,6 +73,7 @@ budget, timeout, policy or journal settings.
 | Tool timeouts | `tool_timeout_seconds=` or tool decorator | Worker processes do not provide security isolation |
 | Crash recovery | `journal_path=` | Human-reviewed outcomes, not automatic replay or exactly-once effects |
 | Conversation persistence | `session_path=` | Saved history alone cannot establish whether an action completed |
+| Between-step steering | `get_steering=callable` | Called only after a saved tool batch; text guides the model but cannot authorize tools or cancel a running one |
 
 For example, `RunLimits(max_model_calls=12, max_tool_calls=12, max_seconds=60)`
 caps further work within each task, including compaction. Unknown token usage stays

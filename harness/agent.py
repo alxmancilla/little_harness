@@ -92,20 +92,22 @@ class Agent:
     compact_at_tokens, when set, replaces the compact_at character threshold with an
     estimated token threshold: the last reported input_tokens plus characters added since,
     or characters alone, at CHARS_PER_TOKEN characters per token.
+    get_steering(), when set, is called after each saved tool batch; nonempty returned
+    text is added to that user turn before the next model call. It cannot authorize tools.
     """
 
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
                  compact_at=40000, session_path=None, *, tools, limits=None, tool_timeout_seconds=None,
                  journal_path=None, on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
-                 trace_include_content=False, compact_at_tokens=None):
+                 trace_include_content=False, compact_at_tokens=None, get_steering=None):
         self.model, self.system, self.max_steps = model, system, max_steps
         self._configure_observability(trace_path, trace_context, trace_include_content,
                                       on_event, event_include_content, quiet)
         self._configure_tools(tools, tool_policy, tool_admission, approve,
                               max_tool_output, tool_timeout_seconds, writable_roots)
         self._configure_context(compact_at, compact_at_tokens, session_path)
-        self._configure_controls(limits, journal_path)
+        self._configure_controls(limits, get_steering, journal_path)
         # Per-run state, reset by run_result().
         self._budget = None
         self._event_run_id, self._event_step, self._event_sequence = None, None, 0
@@ -166,10 +168,13 @@ class Agent:
         self.compaction_archive_path = (self.session_path.with_name(self.session_path.name + ".compacted.jsonl")
                                         if self.session_path is not None else None)
 
-    def _configure_controls(self, limits, journal_path):
-        """Per-task budgets and the optional crash-recovery journal, opened last."""
+    def _configure_controls(self, limits, get_steering, journal_path):
+        """Per-task budgets, optional steering and the crash-recovery journal, opened last."""
         if limits is not None and not isinstance(limits, RunLimits):
             raise TypeError("limits must be RunLimits or None")
+        if get_steering is not None and not callable(get_steering):
+            raise TypeError("get_steering must be callable or None")
+        self.get_steering = get_steering
         self.limits = limits if limits is not None else RunLimits()
         self.journal = ExecutionJournal(journal_path) if journal_path is not None else None
         if self.journal is None:
@@ -562,6 +567,23 @@ class Agent:
             out = out[:self.max_tool_output] + f"\n[truncated, {len(out)} characters total]"
         return ToolOutcome("completed", out, False), None
 
+    def _steer(self, step):
+        """Ask for between-step guidance; add nonempty text to the saved tool-result turn."""
+        if self.get_steering is None:
+            return
+        text = self.get_steering()
+        if text is None or text == "":
+            return
+        if type(text) is not str:
+            raise ValueError("get_steering must return None or a string")
+        if not text.strip():
+            return
+        self.messages[-1]["content"].append({"type": "text", "text": text})
+        self._save()
+        self._print(f"[step {step}] 🧭 steering: {text[:200]}")
+        self._trace("steering", step=step, characters=len(text), content_fields={"text": text})
+        self._emit("steering", characters=len(text), content={"text": text})
+
     def run(self, task):
         """Compatibility API: return the same display text used by the CLI."""
         return self.run_result(task).text
@@ -769,6 +791,7 @@ class Agent:
             self._budget.record_tool_results(results)
             self._save()
             self._budget.check()
+            self._steer(step)
 
         self._trace("stopped", reason="max_steps")
         self._status, self._stop_reason = "stopped", "max_steps"

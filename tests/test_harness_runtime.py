@@ -299,3 +299,55 @@ class RuntimeTests(f.HarnessTestCase):
                 self.assertNotIn("private-invalid-setting", child.stdout + child.stderr)
                 self.assertFalse((root / "workspace/report.txt").exists())
                 self.assertEqual(child.returncode, 1 if value == "private-invalid-setting" else 0)
+
+
+class SteeringTests(f.HarnessTestCase):
+    def test_steering_text_joins_the_tool_result_turn_before_the_next_call(self):
+        model = f.RecordingModel(f.tool_calls(("a", "current_time", {})), f.tool_calls(("b", "current_time", {})),
+                                 f.reply("done"))
+        replies = iter(["Focus on UTC only.", None])
+        events = []
+        session = self.dir / "session.json"
+        result = self.agent(model, get_steering=lambda: next(replies), on_event=events.append,
+                            session_path=session).run_result("go")
+        self.assertEqual(result.status, "completed")
+        steered = model.calls[1][-1]
+        self.assertEqual(steered["role"], "user")
+        self.assertEqual([block["type"] for block in steered["content"]], ["tool_result", "text"])
+        self.assertEqual(steered["content"][-1]["text"], "Focus on UTC only.")
+        self.assertEqual([block["type"] for block in model.calls[2][-1]["content"]], ["tool_result"])
+        self.assertEqual(json.loads(session.read_text())[2], steered)
+        self.assertEqual([r["characters"] for r in self.trace_records() if r["kind"] == "steering"], [18])
+        self.assertEqual([e.data["step"] for e in events if e.kind == "steering"], [1])
+
+    def test_steering_is_not_requested_after_a_final_answer_or_a_stop(self):
+        steer = mock.Mock(return_value="ignored")
+        self.agent([f.reply("done")], get_steering=steer).run_result("go")
+        result = self.agent([f.tool_calls(("a", "current_time", {}))], get_steering=steer,
+                            limits=h.RunLimits(max_tool_calls=0)).run_result("go")
+        self.assertEqual(result.stop_reason, "max_tool_calls")
+        steer.assert_not_called()
+
+    def test_blank_steering_is_ignored_and_invalid_values_are_programming_errors(self):
+        for value in ("", "   ", None):
+            with self.subTest(value=value):
+                model = f.RecordingModel(f.tool_calls(("a", "current_time", {})), f.reply("done"))
+                self.agent(model, get_steering=lambda: value).run_result("go")
+                self.assertEqual([block["type"] for block in model.calls[1][-1]["content"]], ["tool_result"])
+        with self.assertRaisesRegex(ValueError, "get_steering"):
+            self.agent([f.tool_calls(("a", "current_time", {}))], get_steering=lambda: 7).run_result("go")
+        with self.assertRaisesRegex(TypeError, "get_steering"):
+            self.agent([], get_steering="not callable")
+
+    def test_interrupt_while_waiting_for_steering_keeps_the_saved_results(self):
+        session = self.dir / "session.json"
+
+        def interrupt():
+            raise KeyboardInterrupt
+
+        result = self.agent([f.tool_calls(("a", "current_time", {}))], get_steering=interrupt,
+                            session_path=session).run_result("go")
+        self.assertEqual(result.status, "interrupted")
+        saved = json.loads(session.read_text())
+        self.assertEqual([block["type"] for block in saved[-1]["content"]], ["tool_result"])
+        self.assertFalse(saved[-1]["content"][0]["is_error"])

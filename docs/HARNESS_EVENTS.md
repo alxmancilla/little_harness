@@ -44,6 +44,7 @@ tuples inside events. The callback cannot mutate model arguments through the eve
 | `tool_finished` | Name/ID/action ID, `status`, `is_error`, `outcome_unknown` |
 | `compaction_started` | `chars_before`; with `compact_at_tokens`, also `estimated_tokens_before` |
 | `compaction_finished` | `status`; successful replacement adds `dropped`, before/after character counts, `archived: true` when a session archive record was written and, with `compact_at_tokens`, estimated token counts |
+| `steering` | `characters`; after a saved tool batch, when `get_steering()` returned nonempty text |
 | `run_stopped` | `status`, `stop_reason` |
 | `run_finished` | Final `status`, `stop_reason`, `usage`, `elapsed_seconds` |
 
@@ -81,7 +82,8 @@ stop reasons and sizes; these may themselves be sensitive. This is data minimiza
 
 `event_include_content=True` adds `task` on run start, `text` on model text events,
 `input` on approval requests/tool starts, `input` and `output` on tool finishes,
-`summary` on successful compaction, and `answer`/display `text` on run finish.
+`summary` on successful compaction, `text` on steering, and `answer`/display `text`
+on run finish.
 Only opt in for trusted consumers. JSONL traces independently default to metadata
 only; `trace_include_content=True` opts into task/model/tool/summary/error content.
 The teaching CLI uses `HARNESS_TRACE_CONTENT=1`; controlled HotpotQA evaluation
