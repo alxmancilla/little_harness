@@ -231,7 +231,7 @@ class EventTests(f.HarnessTestCase):
             result = agent.run_result("go")
         self.assertEqual(result.status, "interrupted")
         execute.assert_called_once()
-        saved = json.loads(session.read_text())[-1]["content"]
+        saved = f.saved_messages(session)[-1]["content"]
         self.assertEqual(saved[0]["content"], "completed")
         self.assertIn("not run", saved[1]["content"])
         self.assertEqual(received[-1].kind, "tool_finished")
@@ -270,7 +270,7 @@ class EventTests(f.HarnessTestCase):
             result = agent.run_result("go")
         execute.assert_called_once()
         self.assertEqual(result.status, "interrupted")
-        saved = json.loads(session.read_text())[-1]["content"]
+        saved = f.saved_messages(session)[-1]["content"]
         self.assertEqual([r["tool_use_id"] for r in saved], ["a", "b", "c"])
         self.assertEqual(saved[0]["content"], "completed")
         self.assertTrue(all("not run" in r["content"] for r in saved[1:]))
@@ -306,7 +306,7 @@ class EventTests(f.HarnessTestCase):
         def observe(event):
             self.events.append(event)
             if event.kind == "run_finished":
-                self.assertEqual(json.loads(session.read_text())[-1]["content"][0]["text"], "done")
+                self.assertEqual(f.saved_messages(session)[-1]["content"][0]["text"], "done")
                 self.assertTrue(agent.journal.inspect()[0]["run_closed"])
 
         agent = self.agent([f.tool_calls(("a", "current_time", {})), f.reply("done")],

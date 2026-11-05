@@ -236,7 +236,7 @@ and the [HotpotQA evaluation workflow](docs/REFERENCE.md#hotpotqa-evaluation).
   tools, not arbitrary Python code or inherited process privileges.
 - **Data remains sensitive:** prompts, document passages, tool results, traces and
   sessions may contain private content. Traces/events default to metadata only;
-  full-content opt-ins, sessions and their `.compacted.jsonl` archives still
+  full-content opt-ins and sessions, which keep the full history, still
   disclose content. Metadata and caller
   annotations are not secret-redacted. Curate documents and control provider/file access.
 - **No automatic recovery of effects:** cancellation preserves known results but

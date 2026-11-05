@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.helpers import (HarnessTestCase, RecordingModel, compaction_history,
-                           REPO, reply, sse_lines, tool_calls, used)
+                           REPO, reply, saved_messages, sse_lines, tool_calls, used)
 from agents.teaching import TeachingConfig, create_tools, tools as teaching_tools
 from agents.teaching.config import load_env
 from agents.teaching.demos import rag_demo_model
@@ -322,7 +322,8 @@ class AgentLoopTests(HarnessTestCase):
         session = self.dir / "s.json"
         agent = self.agent(RecordingModel(h.ModelError("API error 500: boom")), session_path=session)
         self.assertEqual(agent.run("hi"), "[stopped: model call failed: API error 500: boom]")
-        self.assertEqual(json.loads(session.read_text()), [{"role": "user", "content": "hi"}])
+        self.assertEqual(json.loads(session.read_text()),
+                         {"version": 2, "messages": [{"role": "user", "content": "hi"}], "compaction": None})
         self.assertEqual(self.trace_records()[-1]["kind"], "error")
 
     def test_programming_errors_are_not_treated_as_model_failures(self):
@@ -336,7 +337,7 @@ class AgentLoopTests(HarnessTestCase):
         agent = self.agent([tool_calls(("c1", "write_file", {"path": "x.txt", "content": "x"}))],
                            approve=interrupt, session_path=session)
         self.assertEqual(agent.run("write"), "[stopped: interrupted by the user]")
-        saved = json.loads(session.read_text())
+        saved = saved_messages(session)
         self.assertEqual([m["role"] for m in saved], ["user", "assistant", "user"])
         self.assertEqual(saved[-1]["content"], [{"type": "tool_result", "tool_use_id": "c1",
                                                  "content": "interrupted: outcome unknown; inspect effects before retrying",
@@ -362,7 +363,7 @@ class AgentLoopTests(HarnessTestCase):
         agent = self.agent([tool_calls(("c1", "finish", {}), ("c2", "stop_mid_action", {}),
                                        ("c3", "must_not_run", {})), reply("resumed")], session_path=session)
         self.assertIn("interrupted", agent.run("go"))
-        results = json.loads(session.read_text())[-1]["content"]
+        results = saved_messages(session)[-1]["content"]
         self.assertEqual([r["tool_use_id"] for r in results], ["c1", "c2", "c3"])
         self.assertEqual((results[0]["content"], results[0]["is_error"]), ("wrote effect.txt", False))
         self.assertIn("outcome unknown", results[1]["content"])
@@ -374,7 +375,7 @@ class AgentLoopTests(HarnessTestCase):
         session = self.dir / "s.json"
         agent = self.agent(RecordingModel(KeyboardInterrupt(), reply("resumed")), session_path=session)
         self.assertIn("interrupted", agent.run("go"))
-        self.assertEqual(json.loads(session.read_text()), [{"role": "user", "content": "go"}])
+        self.assertEqual(saved_messages(session), [{"role": "user", "content": "go"}])
         self.assertEqual(agent.run("continue"), "resumed")
 
     def test_truncated_tool_call_is_reported_not_run(self):
@@ -423,21 +424,24 @@ class SessionTests(HarnessTestCase):
 class CompactionTests(HarnessTestCase):
     history = staticmethod(compaction_history)
 
-    def test_old_turns_are_replaced_by_a_summary(self):
+    def test_model_sees_a_summary_while_history_stays_complete(self):
         model = RecordingModel(reply("SUMMARY"))
         agent = self.agent(model, compact_at=1500)
         agent.messages = self.history()
         before = h._size(agent.messages)
         agent._compact(step=1)
-        self.assertTrue(agent.messages[0]["content"].endswith("SUMMARY"))
-        roles = [m["role"] for m in agent.messages]
-        self.assertEqual(roles, ["user", "assistant", "user"])
-        self.assertLess(h._size(agent.messages), before)
-        blocks = [b for m in agent.messages[1:] for b in m["content"]]
+        self.assertEqual(agent.messages, self.history())
+        context = agent._model_context()
+        self.assertTrue(context[0]["content"].endswith("SUMMARY"))
+        self.assertEqual([m["role"] for m in context], ["user", "assistant", "user"])
+        self.assertLess(h._size(context), before)
+        self.assertEqual(context[1:], self.history()[agent._context_start:])
+        blocks = [b for m in context[1:] for b in m["content"]]
         self.assertEqual({b["id"] for b in blocks if b["type"] == "tool_use"},
                          {b["tool_use_id"] for b in blocks if b["type"] == "tool_result"})
         self.assertIn("tool call: read_file", model.calls[0][0]["content"])
-        self.assertEqual(self.trace_records()[-1]["kind"], "compact")
+        record = self.trace_records()[-1]
+        self.assertEqual((record["kind"], record["context_start"]), ("compact", agent._context_start))
 
     def test_small_history_is_not_compacted(self):
         model = RecordingModel()
@@ -455,46 +459,41 @@ class CompactionTests(HarnessTestCase):
                 self.assertEqual(agent.messages, self.history())
         self.assertIn("compact_failed", [r["kind"] for r in self.trace_records()])
 
-    def test_session_compaction_appends_replaced_messages_before_dropping_them(self):
+    def test_session_saves_full_history_and_resumes_the_compacted_view(self):
         session = self.dir / "session.json"
-        agent = self.agent(RecordingModel(reply("FIRST"), reply("SECOND")), compact_at=1500, session_path=session)
-        archive = agent.compaction_archive_path
-        self.assertEqual(archive, self.dir / "session.json.compacted.jsonl")
-        original = self.history()
+        model = RecordingModel(reply("FIRST"), reply("SECOND"))
+        agent = self.agent(model, compact_at=1500, session_path=session)
         agent.messages = self.history()
         agent._compact(step=1)
         agent._save()
-        records = [json.loads(line) for line in archive.read_text().splitlines()]
-        self.assertEqual(len(records), 1)
-        dropped = records[0]["dropped"]
-        self.assertEqual(records[0]["messages"], original[:dropped])
-        self.assertEqual(records[0]["summary"], "FIRST")
-        self.assertEqual(json.loads(session.read_text())[1:], original[dropped:])
-        self.assertTrue(self.trace_records()[-1]["archived"])
+        first_start = agent._context_start
+        saved = json.loads(session.read_text())
+        self.assertEqual(saved["messages"], self.history())
+        self.assertEqual(saved["compaction"], {"start": first_start, "summary": "FIRST"})
+        resumed = self.agent([], session_path=session)
+        self.assertEqual(resumed.messages, self.history())
+        self.assertEqual(resumed._model_context(), agent._model_context())
         agent.messages += self.history()[1:]
         agent._compact(step=2)
-        self.assertEqual([json.loads(line)["summary"] for line in archive.read_text().splitlines()],
-                         ["FIRST", "SECOND"])
-        with self.assertRaisesRegex(ValueError, "journal"):
-            self.agent([], session_path=session, journal_path=archive)
+        self.assertIn("FIRST", model.calls[1][0]["content"])
+        self.assertGreater(agent._context_start, first_start)
+        self.assertEqual(agent._model_context()[0]["content"], h.SUMMARY_PREFIX + "SECOND")
+        self.assertEqual(len(agent.messages), 2 * len(self.history()) - 1)
 
-    def test_compaction_without_session_writes_no_archive(self):
-        agent = self.agent(RecordingModel(reply("SUMMARY")), compact_at=1500)
-        self.assertIsNone(agent.compaction_archive_path)
-        agent.messages = self.history()
-        agent._compact(step=1)
-        self.assertNotIn("archived", self.trace_records()[-1])
-        self.assertEqual(sorted(path.name for path in self.dir.glob("*.compacted.jsonl")), [])
-
-    def test_unwritable_archive_keeps_history_and_reports_failure(self):
+    def test_invalid_session_state_exits_without_overwriting(self):
         session = self.dir / "session.json"
-        agent = self.agent(RecordingModel(reply("SUMMARY")), compact_at=1500, session_path=session)
-        agent.compaction_archive_path.mkdir()
-        agent.messages = self.history()
-        agent._compact(step=1)
-        self.assertEqual(agent.messages, self.history())
-        record = self.trace_records()[-1]
-        self.assertEqual((record["kind"], record["reason"]), ("compact_failed", "archive_unavailable"))
+        messages = [{"role": "user", "content": "task"}]
+        for data in ({"version": 3, "messages": messages}, {"version": 2, "messages": "not a list"},
+                     {"version": 2, "messages": messages, "compaction": {"start": 0, "summary": "s"}},
+                     {"version": 2, "messages": messages, "compaction": {"start": 2, "summary": "s"}},
+                     {"version": 2, "messages": messages, "compaction": {"start": True, "summary": "s"}},
+                     {"version": 2, "messages": messages, "compaction": {"start": 1, "summary": ""}},
+                     {"version": 2, "messages": messages, "compaction": "s"}):
+            with self.subTest(data=data):
+                session.write_text(json.dumps(data))
+                with self.assertRaises(SystemExit):
+                    self.agent([], session_path=session)
+                self.assertEqual(json.loads(session.read_text()), data)
 
     def test_token_threshold_without_usage_estimates_from_characters(self):
         chars = h._size(self.history())
@@ -508,7 +507,7 @@ class CompactionTests(HarnessTestCase):
         agent = self.agent(model, compact_at_tokens=tokens - 1)
         agent.messages = self.history()
         agent._compact(step=1)
-        self.assertTrue(agent.messages[0]["content"].endswith("SUMMARY"))
+        self.assertTrue(agent._model_context()[0]["content"].endswith("SUMMARY"))
         record = self.trace_records()[-1]
         self.assertEqual((record["kind"], record["chars_before"], record["estimated_tokens_before"]),
                          ("compact", chars, tokens))
@@ -524,6 +523,9 @@ class CompactionTests(HarnessTestCase):
         self.assertEqual(agent.run("continue"), "answer")
         self.assertEqual(len(model.calls), 3)
         self.assertIn("tool call: read_file", model.calls[1][0]["content"])
+        self.assertEqual(model.calls[2][0]["content"], h.SUMMARY_PREFIX + "SUMMARY")
+        # The task folds into the last saved user turn; everything before it is kept unchanged.
+        self.assertEqual(agent.messages[:len(self.history()) - 1], self.history()[:-1])
         record = next(r for r in self.trace_records() if r["kind"] == "compact")
         self.assertGreaterEqual(record["estimated_tokens_before"], 3000)
         # The stale report described the replaced history, so the new estimate uses characters.

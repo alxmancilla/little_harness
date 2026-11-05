@@ -147,7 +147,7 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
                 self.assertEqual(result.usage.tool_calls_requested, 3)
                 self.assertEqual(result.usage.tool_calls_attempted, 2)
                 self.assertEqual(result.usage.tool_errors, 2)
-                saved = json.loads(session.read_text())[-1]["content"]
+                saved = f.saved_messages(session)[-1]["content"]
                 self.assertEqual([r["tool_use_id"] for r in saved], ["a", "b", "c"])
                 self.assertEqual(saved[0]["content"], "recorded done")
                 self.assertFalse(saved[0]["is_error"])
@@ -263,7 +263,7 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         self.assertEqual(len(children), 2)
         self.assertTrue(all(child.poll() is not None for child in children))
         self.assertEqual(effects.read_text().splitlines(), ["hang"])
-        saved = json.loads(session.read_text())[-1]["content"]
+        saved = f.saved_messages(session)[-1]["content"]
         self.assertEqual(saved[0]["content"], "4")
         self.assertIn("outcome unknown", saved[1]["content"])
         self.assertIn("not run", saved[2]["content"])

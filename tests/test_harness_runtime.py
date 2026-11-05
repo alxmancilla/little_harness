@@ -91,7 +91,7 @@ class RuntimeTests(f.HarnessTestCase):
         self.assertEqual(result.usage.tool_errors, 1)
         execute.assert_called_once()
         self.assertEqual(len(model.calls), 1)
-        saved = json.loads(session.read_text())[-1]["content"]
+        saved = f.saved_messages(session)[-1]["content"]
         self.assertEqual([r["tool_use_id"] for r in saved], ["a", "b"])
         self.assertEqual(saved[0]["content"], "done")
         self.assertIn("not run", saved[1]["content"])
@@ -328,7 +328,7 @@ class SteeringTests(f.HarnessTestCase):
         self.assertEqual([block["type"] for block in steered["content"]], ["tool_result", "text"])
         self.assertEqual(steered["content"][-1]["text"], "Focus on UTC only.")
         self.assertEqual([block["type"] for block in model.calls[2][-1]["content"]], ["tool_result"])
-        self.assertEqual(json.loads(session.read_text())[2], steered)
+        self.assertEqual(f.saved_messages(session)[2], steered)
         self.assertEqual([r["characters"] for r in self.trace_records() if r["kind"] == "steering"], [18])
         self.assertEqual([e.data["step"] for e in events if e.kind == "steering"], [1])
 
@@ -360,6 +360,6 @@ class SteeringTests(f.HarnessTestCase):
         result = self.agent([f.tool_calls(("a", "current_time", {}))], get_steering=interrupt,
                             session_path=session).run_result("go")
         self.assertEqual(result.status, "interrupted")
-        saved = json.loads(session.read_text())
+        saved = f.saved_messages(session)
         self.assertEqual([block["type"] for block in saved[-1]["content"]], ["tool_result"])
         self.assertFalse(saved[-1]["content"][0]["is_error"])

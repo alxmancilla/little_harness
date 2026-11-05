@@ -226,11 +226,12 @@ History compaction uses model-written summaries. By default its threshold counts
 JSON characters. Library callers can pass `compact_at_tokens=` to `Agent` to use an
 estimated token threshold instead: the last reported input tokens plus about one
 token per four characters added since, or characters alone when usage is unknown.
-It preserves recent tool/result pairs, but the summary may lose information. With a
-session, the replaced messages and their summary are first appended to
-`<session>.compacted.jsonl` (for example `session.json.compacted.jsonl`), so a reviewer
-can see what each summary replaced. The archive contains full conversation content
-like the session itself; it is not loaded back into context. Sessions store
+Compaction changes only what the model sees: the latest summary followed by recent
+messages, keeping tool calls with their results. The summary may lose information,
+but the conversation history itself is never shortened. A session file stores that
+full history plus the compaction point and summary, so a reviewer can always see
+what a summary replaced and a resumed session sends the same view. Sessions therefore
+grow over time; older sessions saved as a plain list still load. Sessions store
 conversation state; traces are append-only observations, not replay instructions.
 Use a new session path for an unrelated conversation, and distinct paths for each
 application.

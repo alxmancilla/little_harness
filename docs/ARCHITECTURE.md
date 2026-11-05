@@ -73,8 +73,10 @@ than continuing to later calls or steps.
 1. `run_result()` rejects overlap, creates a fresh `ExecutionBudget` and run ID, emits
    run start, then checks journal recovery before task/model work.
 2. `_run()` appends/saves the task and iterates main steps. `_compact()` may summarize
-   older history through `_call_model()`, using the same budget as normal calls.
-3. `_call_model()` admits/counts the logical call, delivers model observations and
+   older context through `_call_model()`, using the same budget as normal calls. It
+   moves the view's start point; it never shortens the saved history.
+3. `_model_context()` builds the model's input from history: the latest summary, then
+   messages from the compaction point. `_call_model()` admits/counts the logical call, delivers model observations and
    records usage. HTTP/SSE or a scripted callable returns normalized content.
 4. For each non-truncated tool request, the agent admits an attempt. `_run_tool()`
    performs allowlist lookup, then calls one gate method per check in order:

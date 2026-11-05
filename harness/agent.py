@@ -57,6 +57,8 @@ SUMMARY_SYSTEM = (
 )
 
 
+SUMMARY_PREFIX = "[Summary of the earlier conversation, compacted to save context. Not a new request.]\n"
+SESSION_VERSION = 2
 CHARS_PER_TOKEN = 4
 
 
@@ -164,9 +166,8 @@ class Agent:
         # (reported input_tokens, message characters sent) from the latest main model call.
         self._context_usage = None
         self.session_path = Path(session_path) if session_path else None
-        # Append-only record of messages that compaction replaced; sessions only.
-        self.compaction_archive_path = (self.session_path.with_name(self.session_path.name + ".compacted.jsonl")
-                                        if self.session_path is not None else None)
+        # The model sees the summary, then history from _context_start; history itself is never shortened.
+        self._context_start, self._context_summary = 0, None
 
     def _configure_controls(self, limits, get_steering, journal_path):
         """Per-task budgets, optional steering and the crash-recovery journal, opened last."""
@@ -182,8 +183,7 @@ class Agent:
         reserved = {self.trace_path.resolve()}
         if self.session_path is not None:
             reserved.update((self.session_path.resolve(),
-                             self.session_path.with_name(self.session_path.name + ".tmp").resolve(),
-                             self.compaction_archive_path.resolve()))
+                             self.session_path.with_name(self.session_path.name + ".tmp").resolve()))
         journal_files = {Path(str(self.journal.path) + suffix)
                          for suffix in ("", "-journal", "-wal", "-shm")}
         if (any(path.is_relative_to(root) for path in journal_files for root in self.writable_roots)
@@ -244,12 +244,26 @@ class Agent:
         return response
 
     def _load(self):
+        """Read a version 2 session object, or a legacy list of messages without compaction state."""
         if not self.session_path or not self.session_path.exists():
             return []
         try:
-            messages = json.loads(self.session_path.read_text(encoding="utf-8"))
-            if not isinstance(messages, list):
-                raise ValueError("expected a list of messages")
+            data = json.loads(self.session_path.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                messages, compaction = data, None
+            elif isinstance(data, dict) and data.get("version") == SESSION_VERSION:
+                messages, compaction = data.get("messages"), data.get("compaction")
+                if not isinstance(messages, list):
+                    raise ValueError("expected a list of messages")
+            else:
+                raise ValueError(f"expected a list of messages or a version {SESSION_VERSION} session")
+            if compaction is not None:
+                start, summary = (compaction.get("start"), compaction.get("summary")) \
+                    if isinstance(compaction, dict) else (None, None)
+                if (type(start) is not int or not 0 < start <= len(messages)
+                        or type(summary) is not str or not summary):
+                    raise ValueError("invalid compaction state")
+                self._context_start, self._context_summary = start, summary
         except ValueError as e:
             sys.exit(f"{self.session_path} is not a valid session ({e}); fix or delete it to start fresh")
         self._print(f"Resumed {len(messages)} messages from {self.session_path}")
@@ -259,9 +273,11 @@ class Agent:
         """Write atomically; journal-enabled runs fsync the file and parent directory."""
         if not self.session_path:
             return
+        compaction = (None if self._context_summary is None else
+                      {"start": self._context_start, "summary": self._context_summary})
         tmp = self.session_path.with_name(self.session_path.name + ".tmp")
         with tmp.open("w", encoding="utf-8") as stream:
-            json.dump(self.messages, stream)
+            json.dump({"version": SESSION_VERSION, "messages": self.messages, "compaction": compaction}, stream)
             if self.journal is not None:
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -294,9 +310,17 @@ class Agent:
         tokens = usage.get("input_tokens") if isinstance(usage, dict) else None
         self._context_usage = (tokens, sent_chars) if type(tokens) is int and tokens >= 0 else None
 
+    def _model_context(self):
+        """What the model sees: the latest summary, then history from the compaction point."""
+        if self._context_summary is None:
+            return self.messages
+        return ([{"role": "user", "content": SUMMARY_PREFIX + self._context_summary}]
+                + self.messages[self._context_start:])
+
     def _compact(self, step):
-        """Replace older turns without separating tool calls from their results."""
-        chars = _size(self.messages)
+        """Summarize older context without separating tool calls from their results."""
+        context = self._model_context()
+        chars = _size(context)
         if self.compact_at_tokens is None:
             size, limit, per_unit = chars, self.compact_at, 1
         else:
@@ -304,24 +328,24 @@ class Agent:
         keep = limit // 3
         if size <= limit or size < self._size_after_compact + keep:
             return
-        sizes = [_size(m) for m in self.messages]
-        assistants = [i for i, m in enumerate(self.messages) if m["role"] == "assistant"]
+        sizes = [_size(m) for m in context]
+        assistants = [i for i, m in enumerate(context) if m["role"] == "assistant"]
         cut, tail = None, 0
-        for i in range(len(self.messages) - 1, 1, -1):
+        for i in range(len(context) - 1, 1, -1):
             tail += sizes[i]
             if tail > keep * per_unit:
                 break
-            if self.messages[i]["role"] == "assistant":
+            if context[i]["role"] == "assistant":
                 cut = i
         if cut is None:
-            cut = next((i for i in reversed(assistants) if 2 <= i < len(self.messages)), None)
+            cut = next((i for i in reversed(assistants) if 2 <= i < len(context)), None)
         if cut is None:
             return
         extra_fields = {"estimated_tokens_before": size} if self.compact_at_tokens is not None else {}
         self._emit("compaction_started", chars_before=chars, **extra_fields)
         try:
             summary = self._call_model(SUMMARY_SYSTEM,
-                                      [{"role": "user", "content": render_transcript(self.messages[:cut])}], [],
+                                      [{"role": "user", "content": render_transcript(context[:cut])}], [],
                                       event_purpose="compaction")
         except ModelError as e:
             self._trace("compact_failed", step=step, category=getattr(e, "category", "unknown"),
@@ -341,19 +365,11 @@ class Agent:
         if not text:
             self._emit("compaction_finished", status="empty")
             return
-        try:
-            archived = self._archive_compacted(step, self.messages[:cut], text)
-        except OSError as e:
-            self._trace("compact_failed", step=step, reason="archive_unavailable",
-                        content_fields={"error": str(e)})
-            self._emit("compaction_finished", status="failed")
-            return
-        if archived:
-            extra_fields["archived"] = True
-        self.messages[:cut] = [{"role": "user", "content":
-                                "[Summary of the earlier conversation, compacted to save context. "
-                                "Not a new request.]\n" + text}]
-        chars_after = _size(self.messages)
+        # context[0] is the previous summary when one exists; it is folded into the new one.
+        self._context_start += cut - (1 if self._context_summary is not None else 0)
+        self._context_summary = text
+        extra_fields["context_start"] = self._context_start
+        chars_after = _size(self._model_context())
         # Reported usage described the replaced history; estimate from characters until the next call.
         self._context_usage = None
         if self.compact_at_tokens is None:
@@ -367,19 +383,6 @@ class Agent:
                     **extra_fields, content_fields={"summary": text}, usage=summary.get("usage"))
         self._emit("compaction_finished", status="completed", dropped=cut, chars_before=chars,
                    chars_after=chars_after, **extra_fields, content={"summary": text})
-
-    def _archive_compacted(self, step, messages, summary):
-        """Append replaced messages before the session drops them; return whether a record was written."""
-        if self.compaction_archive_path is None:
-            return False
-        record = {"ts": datetime.now(timezone.utc).isoformat(), "step": step, "dropped": len(messages),
-                  "summary": summary, "messages": messages}
-        with self.compaction_archive_path.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(record) + "\n")
-            if self.journal is not None:
-                stream.flush()
-                os.fsync(stream.fileno())
-        return True
 
     def _trace(self, kind, *, content_fields=None, **data):
         """Separate runtime metadata from opt-in conversation and error content."""
@@ -687,8 +690,9 @@ class Agent:
                 self._emit("model_text", model_call=self._budget.model_calls, phase="delta",
                            characters=len(delta), content={"text": delta})
 
+            context = self._model_context()
             try:
-                resp = self._call_model(self.system, self.messages, schemas, on_text=on_text)
+                resp = self._call_model(self.system, context, schemas, on_text=on_text)
             except ModelError as e:
                 if streamed:
                     self._print()
@@ -700,7 +704,7 @@ class Agent:
             if streamed:
                 self._print()
             if self.compact_at_tokens is not None:
-                self._record_context_usage(resp.get("usage"), _size(self.messages))
+                self._record_context_usage(resp.get("usage"), _size(context))
             content = resp["content"]
             self.messages.append({"role": "assistant", "content": content})
             self._trace("model", step=step, stop_reason=resp.get("stop_reason"),

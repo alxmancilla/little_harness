@@ -77,6 +77,12 @@ def package_echo(value: str):
     return value
 
 
+def saved_messages(path):
+    """Messages from a saved session file: a version 2 object or a legacy list."""
+    data = json.loads(Path(path).read_text())
+    return data if isinstance(data, list) else data["messages"]
+
+
 def compaction_history(pairs=5):
     messages = [{"role": "user", "content": "task"}]
     for index in range(pairs):

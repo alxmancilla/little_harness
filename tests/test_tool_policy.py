@@ -165,7 +165,7 @@ class PolicyTests(f.HarnessTestCase):
         execute.assert_not_called()
         worker.assert_not_called()
         self.assertEqual([e["status"] for e in self.select("tool_finished")], ["not_run", "not_run"])
-        saved = json.loads(agent.session_path.read_text())[-1]["content"]
+        saved = f.saved_messages(agent.session_path)[-1]["content"]
         self.assertEqual([r["tool_use_id"] for r in saved], ["a", "b"])
         combined = self.trace.read_text() + json.dumps([e.to_dict() for e in self.events]) + result.text
         self.assertNotIn(marker, combined)
@@ -228,7 +228,7 @@ class PolicyTests(f.HarnessTestCase):
                            journal_path=self.dir / "journal.sqlite3", session_path=self.dir / "session.json")
         result = agent.run_result("go")
         self.assertEqual(result.stop_reason, "tool_policy_error")
-        saved = json.loads(agent.session_path.read_text())[-1]["content"]
+        saved = f.saved_messages(agent.session_path)[-1]["content"]
         self.assertEqual(saved[0]["content"], "4")
         self.assertTrue(all(r["is_error"] for r in saved[1:]))
         self.assertEqual(agent.journal.inspect(pending_only=True), [])
@@ -336,7 +336,7 @@ class PolicyTests(f.HarnessTestCase):
                 worker.assert_not_called()
                 self.assertEqual(agent.journal.inspect(), [])
                 self.assertEqual(len(model.calls), 1)
-                saved = json.loads(agent.session_path.read_text())[-1]["content"]
+                saved = f.saved_messages(agent.session_path)[-1]["content"]
                 self.assertEqual([r["tool_use_id"] for r in saved], ["a", "b"])
                 self.assertIn("outcome unknown", saved[0]["content"])
                 self.assertIn("not run", saved[1]["content"])

@@ -49,7 +49,7 @@ class TracePrivacyTests(TemporaryDirectoryTestCase):
         agent.messages = compaction_history()
         agent._compact(1)
         self.assertNotIn("private-summary", agent.trace_path.read_text())
-        self.assertIn("private-summary", agent.messages[0]["content"])
+        self.assertIn("private-summary", agent._model_context()[0]["content"])
 
         def failing_model(*args, **kwargs):
             raise ModelError("private-error")

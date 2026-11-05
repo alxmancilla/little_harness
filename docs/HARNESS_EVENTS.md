@@ -43,7 +43,7 @@ tuples inside events. The callback cannot mutate model arguments through the eve
 | `tool_started` | Name/ID, `risky`, `action_id`; validated, approved dispatch is about to start |
 | `tool_finished` | Name/ID/action ID, `status`, `is_error`, `outcome_unknown` |
 | `compaction_started` | `chars_before`; with `compact_at_tokens`, also `estimated_tokens_before` |
-| `compaction_finished` | `status`; successful replacement adds `dropped`, before/after character counts, `archived: true` when a session archive record was written and, with `compact_at_tokens`, estimated token counts |
+| `compaction_finished` | `status`; successful compaction adds `dropped` (messages summarized out of the model's view), `context_start` (history index where the view now resumes), before/after character counts and, with `compact_at_tokens`, estimated token counts |
 | `steering` | `characters`; after a saved tool batch, when `get_steering()` returned nonempty text |
 | `run_stopped` | `status`, `stop_reason` |
 | `run_finished` | Final `status`, `stop_reason`, `usage`, `elapsed_seconds` |

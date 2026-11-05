@@ -232,26 +232,30 @@ never execute/replay a tool, repair a session or infer external success.
 
 Optional sessions MUST save JSON via temporary-file replacement at complete protocol
 boundaries, not between a tool request and its result batch. With journaling, saves
-also flush/fsync before run closure, including the directory on POSIX. An invalid
-JSON/non-list session MUST stop loading rather than be overwritten. Session history
-alone MUST NOT be treated as proof of action completion.
+also flush/fsync before run closure, including the directory on POSIX. A session is
+`{"version": 2, "messages": [...], "compaction": null | {"start": n, "summary": "..."}}`;
+a legacy JSON list of messages still loads, without compaction state, and is
+rewritten in version 2 on the next save. Invalid JSON, an unknown version, a
+non-list `messages` or invalid compaction state MUST stop loading rather than be
+overwritten. Session history alone MUST NOT be treated as proof of action completion.
 
 ### FR-10 — Compact context without splitting tool exchanges
 
-Above the configured JSON-character threshold, the agent MAY replace older history
-with a model-written summary and retain a recent tail beginning at an assistant
-boundary. When `compact_at_tokens` is set, an estimated token threshold replaces the
+History is never shortened. The model receives a view built from it: when a
+compaction exists, one user message with the latest summary, then the history from
+`start`; otherwise the full history. Above the configured JSON-character threshold
+(measured on that view), the agent MAY summarize the older part of the view and
+move `start` forward to an assistant boundary, so tool calls stay with their results;
+a previous summary is folded into the new one. When `compact_at_tokens` is set, an
+estimated token threshold replaces the
 character threshold: the latest main call's reported `input_tokens` plus characters
 added since, divided by `CHARS_PER_TOKEN` (4), or characters alone when usage is
 unknown or the history was just compacted. It is an estimate, not a tokenizer count.
 It MUST avoid repeated compaction without sufficient history growth.
-Empty summaries or expected summarizer failures MUST retain history; summary calls
-still consume the shared budget. Summaries are lossy context, not durable action records.
-With a session, the agent MUST first append the messages it will replace, with the
-summary, to `<session>.compacted.jsonl` (one JSON record per compaction, fsynced when
-journaling). If that append fails, history MUST be retained. The archive is a
-content-bearing review record, never loaded back into context or replayed; compaction
-after an interruption may append a duplicate record. Without a session, nothing is archived.
+Empty summaries or expected summarizer failures MUST leave the view unchanged; summary
+calls still consume the shared budget. Summaries are lossy context for the model, not
+durable action records; reviewers read the full history in the session. Sessions
+therefore grow without bound even though each model request stays bounded.
 
 ### FR-11 — Provide safe, ordered observations
 
@@ -397,8 +401,8 @@ journal across restarts; switching/removing it bypasses recovery protection.
 Read-only tools can disclose data. Workers inherit credentials, filesystem and
 network access. Predicates, callbacks, approval and inline tools can block indefinitely;
 task deadlines cannot preempt them. Worker cleanup cannot undo remote work or guarantee
-termination of detached descendants. Content-enabled traces, sessions, compaction
-archives, results and ordinary inline tool errors may contain sensitive data. Metadata-only traces/events
+termination of detached descendants. Content-enabled traces, sessions (which keep the
+full history), results and ordinary inline tool errors may contain sensitive data. Metadata-only traces/events
 minimize content, but IDs, names and caller annotations can still disclose information.
 There is no automatic retention, encryption or general redaction layer.
 
