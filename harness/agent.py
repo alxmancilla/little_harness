@@ -229,6 +229,8 @@ class Agent:
                 self._budget.record_model_usage(None)
             status = ("interrupted" if isinstance(error, KeyboardInterrupt) else
                       "not_run" if isinstance(error, BudgetExceeded) else "failed")
+            if isinstance(error, ModelError):
+                metadata["error_category"] = getattr(error, "category", "unknown")
             self._emit("model_finished", **metadata, status=status)
             raise
         if self._budget is not None:
@@ -322,7 +324,8 @@ class Agent:
                                       [{"role": "user", "content": render_transcript(self.messages[:cut])}], [],
                                       event_purpose="compaction")
         except ModelError as e:
-            self._trace("compact_failed", step=step, content_fields={"error": str(e)})
+            self._trace("compact_failed", step=step, category=getattr(e, "category", "unknown"),
+                        content_fields={"error": str(e)})
             self._emit("compaction_finished", status="failed")
             return
         except BaseException:
@@ -689,7 +692,8 @@ class Agent:
             except ModelError as e:
                 if streamed:
                     self._print()
-                self._trace("error", step=step, content_fields={"error": str(e)})
+                self._trace("error", step=step, category=getattr(e, "category", "unknown"),
+                            content_fields={"error": str(e)})
                 self._save()
                 self._status, self._stop_reason = "model_error", "model_error"
                 return f"[stopped: model call failed: {e}]"

@@ -878,6 +878,124 @@ class HTTPTests(unittest.TestCase):
                 model("sys", [], [])
 
 
+def anthropic_stream(text, calls):
+    events = [{"type": "message_start", "message": {"usage": {"input_tokens": 5}}}]
+    blocks = ([("text", None)] if text else []) + [("tool", call) for call in calls]
+    for index, (kind, call) in enumerate(blocks):
+        if kind == "text":
+            events.append({"type": "content_block_start", "index": index, "content_block": {"type": "text", "text": ""}})
+            events += [{"type": "content_block_delta", "index": index, "delta": {"type": "text_delta", "text": part}}
+                       for part in text]
+        else:
+            events.append({"type": "content_block_start", "index": index,
+                           "content_block": {"type": "tool_use", "id": call[0], "name": call[1], "input": {}}})
+            events.append({"type": "content_block_delta", "index": index,
+                           "delta": {"type": "input_json_delta", "partial_json": json.dumps(call[2])}})
+        events.append({"type": "content_block_stop", "index": index})
+    events += [{"type": "message_delta", "delta": {"stop_reason": "tool_use" if calls else "end_turn"},
+                "usage": {"output_tokens": 2}}, {"type": "message_stop"}]
+    return sse_lines(*events)
+
+
+def responses_stream(text, calls):
+    output = ([{"type": "message", "content": [{"type": "output_text", "text": "".join(text)}]}] if text else [])
+    output += [{"type": "function_call", "call_id": cid, "name": name, "arguments": json.dumps(args)}
+               for cid, name, args in calls]
+    events = [{"type": "response.output_text.delta", "delta": part} for part in text]
+    events.append({"type": "response.completed",
+                   "response": {"output": output, "usage": {"input_tokens": 5, "output_tokens": 2}}})
+    return sse_lines(*events)
+
+
+def chat_stream(text, calls):
+    chunks = [{"choices": [{"index": 0, "delta": {"content": part}}]} for part in text]
+    chunks += [{"choices": [{"index": 0, "delta": {"tool_calls": [
+        {"index": i, "id": cid, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}}]}
+        for i, (cid, name, args) in enumerate(calls)]
+    chunks.append({"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls" if calls else "stop"}]})
+    chunks.append({"choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 2}})
+    return sse_lines(*chunks, "[DONE]")
+
+
+class ProviderConformanceTests(unittest.TestCase):
+    """Every adapter must normalize the same scenarios into the same internal response."""
+
+    ADAPTERS = [
+        (clients.AnthropicModel, anthropic_stream, {"type": "error", "error": {"type": "overloaded_error"}},
+         [{"type": "message_start", "message": {}}], "not JSON"),
+        (clients.OpenAIResponsesModel, responses_stream, {"type": "response.failed", "response": {}},
+         [{"type": "response.output_text.delta", "delta": "x"}], {"type": "response.completed"}),
+        (clients.OpenAIChatModel, chat_stream, {"error": {"message": "boom"}},
+         [{"choices": [{"delta": {"content": "x"}}]}], {"choices": [None]}),
+    ]
+
+    def setUp(self):
+        sleep = mock.patch("harness.model_clients.time.sleep")
+        sleep.start()
+        self.addCleanup(sleep.stop)
+
+    def call(self, cls, lines):
+        """Run a full client call over a fake HTTP response; return (response or error, deltas, requests)."""
+        deltas = []
+        with mock.patch.object(urllib.request.OpenerDirector, "open", return_value=FakeResponse(lines)) as send:
+            try:
+                return cls("m")("sys", [{"role": "user", "content": "hi"}], [], on_text=deltas.append), deltas, send
+            except h.ModelError as error:
+                return error, deltas, send
+
+    def test_text_reply_streams_deltas_and_reports_usage(self):
+        for cls, stream, *_ in self.ADAPTERS:
+            with self.subTest(adapter=cls.__name__):
+                response, deltas, _ = self.call(cls, stream(["Hi ", "there"], []))
+                self.assertEqual(deltas, ["Hi ", "there"])
+                self.assertEqual(response["stop_reason"], "end_turn")
+                self.assertEqual(response["content"], [{"type": "text", "text": "Hi there"}])
+                self.assertEqual(response["usage"], {"input_tokens": 5, "output_tokens": 2})
+                self.assertEqual(response["truncated_tool_ids"], [])
+
+    def test_multiple_tool_calls_keep_order_ids_names_and_arguments(self):
+        calls = [("c1", "calculator", {"expression": "2+2"}), ("c2", "current_time", {})]
+        expected = [{"type": "tool_use", "id": cid, "name": name, "input": args} for cid, name, args in calls]
+        for cls, stream, *_ in self.ADAPTERS:
+            with self.subTest(adapter=cls.__name__):
+                response, _, _ = self.call(cls, stream(["Checking."], calls))
+                self.assertEqual(response["stop_reason"], "tool_use")
+                self.assertEqual(response["content"], [{"type": "text", "text": "Checking."}] + expected)
+                self.assertEqual(response["truncated_tool_ids"], [])
+
+    def test_stream_failures_are_categorized_without_retrying(self):
+        for cls, _, error_event, cut_off, malformed in self.ADAPTERS:
+            for lines, category in ((sse_lines(error_event), "provider_error"),
+                                    (sse_lines(*cut_off), "incomplete_response"),
+                                    (sse_lines(malformed), "malformed_response")):
+                with self.subTest(adapter=cls.__name__, category=category):
+                    error, _, send = self.call(cls, lines)
+                    self.assertIsInstance(error, h.ModelError)
+                    self.assertEqual(error.category, category)
+                    self.assertEqual(send.call_count, 1)
+
+    def test_http_failures_are_categorized_by_status(self):
+        for cls, *_ in self.ADAPTERS:
+            for code, category in ((429, "rate_limited"), (401, "auth"), (403, "auth"),
+                                   (400, "request_rejected"), (503, "server_error")):
+                with self.subTest(adapter=cls.__name__, code=code), mock.patch.object(
+                        urllib.request.OpenerDirector, "open", side_effect=HTTPTests.http_error(code)):
+                    with self.assertRaises(h.ModelError) as caught:
+                        cls("m")("sys", [], [])
+                    self.assertEqual(caught.exception.category, category)
+                    self.assertEqual(str(caught.exception), f"API error {code}")
+            with self.subTest(adapter=cls.__name__, failure="network"), mock.patch.object(
+                    urllib.request.OpenerDirector, "open", side_effect=urllib.error.URLError("reset")):
+                with self.assertRaises(h.ModelError) as caught:
+                    cls("m")("sys", [], [])
+                self.assertEqual(caught.exception.category, "network")
+
+    def test_categories_are_a_fixed_vocabulary_with_an_unknown_default(self):
+        self.assertEqual(h.ModelError("custom").category, "unknown")
+        with self.assertRaisesRegex(ValueError, "category"):
+            h.ModelError("custom", "context_too_long_maybe")
+
+
 class StartupTests(HarnessTestCase):
     def test_env_loader_handles_quotes_comments_and_shell_precedence(self):
         path = self.dir / ".env"

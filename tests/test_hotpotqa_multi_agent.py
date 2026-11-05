@@ -82,7 +82,7 @@ class MultiWorkerTests(HotpotQAWorkerTestCase):
         self.assertEqual(result["status"], "completed")
 
     def test_reviewer_failure_or_exhaustion_never_promotes_the_researcher_draft(self):
-        cases = [(ModelError("private-provider-detail"), "model_error"),
+        cases = [(ModelError("private-provider-detail", "rate_limited"), "model_error"),
                  (KeyboardInterrupt(), "interrupted"),
                  (reply("refused", stop="refusal"), "refusal"),
                  (reply("cut off", stop="max_tokens"), "max_tokens"),
@@ -99,6 +99,9 @@ class MultiWorkerTests(HotpotQAWorkerTestCase):
                 self.assertIsNone(result["prediction"])
                 self.assertFalse(result["tokens"]["complete"])
                 self.assertNotIn("private-provider-detail", trace.read_text() + json.dumps(result))
+                if status == "model_error":
+                    errors = [r for r in map(json.loads, trace.read_text().splitlines()) if r["kind"] == "error"]
+                    self.assertEqual([r["category"] for r in errors], ["rate_limited"])
 
     def test_failed_tool_attempts_consume_shared_budget(self):
         invalid = tool_calls(("bad", "read_document", {"document": "../../source.json"}))

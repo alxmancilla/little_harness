@@ -84,9 +84,9 @@ class MeteredModel:
         self.usage.append({})
         try:
             response = self.model(*args, **kwargs)
-        except h.ModelError:
+        except h.ModelError as error:
             # Provider error bodies can contain sensitive data; never persist them.
-            raise h.ModelError("provider call failed") from None
+            raise h.ModelError("provider call failed", error.category) from None
         self.usage[-1] = response.get("usage") or {}
         self.requested_tools += sum(block["type"] == "tool_use" for block in response["content"])
         return response

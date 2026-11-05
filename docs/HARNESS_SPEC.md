@@ -276,6 +276,13 @@ provider diagnostic/stream errors MUST not be interpolated into normal error tex
 Selected connection/HTTP failures MAY retry before streaming; interrupted streams MUST
 fail rather than retry and duplicate output. These protections apply to model transport,
 not the separate built-in `http_get` tool.
+Every adapter MUST raise `ModelError(message, category)` with one fixed category:
+`rate_limited` (429), `auth` (401/403), `request_rejected` (other 4xx and 3xx),
+`server_error` (5xx), `network`, `malformed_response`, `incomplete_response` or
+`provider_error` (an error event in the stream); `unknown` is the default for
+application-raised errors and unlisted values are rejected. The category, never the
+message, is traced and emitted as metadata. All adapters MUST pass the same
+conformance scenarios (`ProviderConformanceTests`).
 
 ### FR-13 — Retrieve bounded, untrusted local evidence
 
@@ -360,6 +367,7 @@ Paths below are relative to `tests/`; scenarios summarize existing regression co
 | AC-08 / FR-08,09 | Process dies around an action/journal commit | Restart blocks before model calls; manual resolution never replays | `test_execution_journal.py`, `journal_crash_worker.py` |
 | AC-09 / FR-11 | Observer raises or attempts payload mutation | Ordinary failure disables observation; immutable payloads protect state | `test_harness_events.py` |
 | AC-10 / FR-12 | Model endpoint redirects or emits diagnostic errors | Redirect blocked; diagnostic content absent from ordinary results/traces | `test_model_clients.py`, `test_mini_harness.py` |
+| AC-13 / FR-12 | The same text, tool-call, stream-failure and HTTP-failure scenarios reach each adapter | Identical normalized responses; identical error categories; no retry after streaming began | `test_mini_harness.py` (`ProviderConformanceTests`) |
 | AC-11 / FR-13 | Malicious text is retrieved from an approved document | Evidence remains data, with corpus/output limits and source metadata | `test_mini_harness.py` |
 | AC-12 / FR-14 | Offline paired evaluation or mismatched reference | Null quality; shared role budgets; mismatch rejected before inference | `test_evaluate_hotpotqa.py`, `test_hotpotqa_multi_agent.py` |
 

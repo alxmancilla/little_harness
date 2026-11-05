@@ -49,6 +49,8 @@ tuples inside events. The callback cannot mutate model arguments through the eve
 | `run_finished` | Final `status`, `stop_reason`, `usage`, `elapsed_seconds` |
 
 `model_finished.status` is `completed`, `failed`, `interrupted` or `not_run`.
+A `failed` call caused by `ModelError` adds `error_category` (for example
+`rate_limited` or `network`); the error message is never included.
 `completed` means a response arrived, not that the task succeeded. Compaction
 statuses are `completed`, `failed`, `empty` or `aborted`. Unknown token usage stays
 `None`, never zero.

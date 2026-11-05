@@ -45,6 +45,18 @@ class RuntimeTests(f.HarnessTestCase):
                     self.assertNotIn("warning", result.answer)
                     self.assertIn("warning", result.text)
 
+    def test_model_error_category_is_traced_and_emitted_without_the_message(self):
+        events = []
+        agent = self.agent(f.RecordingModel(h.ModelError("private-provider-text", "rate_limited")),
+                           on_event=events.append, trace_include_content=False)
+        result = agent.run_result("go")
+        self.assertEqual((result.status, result.stop_reason), ("model_error", "model_error"))
+        record = next(r for r in self.trace_records() if r["kind"] == "error")
+        self.assertEqual(record["category"], "rate_limited")
+        finished = [e.data for e in events if e.kind == "model_finished"]
+        self.assertEqual([(d["status"], d["error_category"]) for d in finished], [("failed", "rate_limited")])
+        self.assertNotIn("private-provider-text", self.trace.read_text() + repr([e.data for e in events]))
+
     def test_step_exhaustion_has_structured_and_display_results(self):
         result = self.agent([f.tool_calls(("a", "current_time", {}))], max_steps=1).run_result("go")
         self.assertEqual((result.status, result.stop_reason), ("stopped", "max_steps"))

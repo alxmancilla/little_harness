@@ -35,7 +35,27 @@ def sse_events(lines):
 
 
 class ModelError(Exception):
-    """An expected API, network or response-format failure, not a harness programming bug."""
+    """An expected API, network or response-format failure, not a harness programming bug.
+
+    category is a fixed, non-sensitive label for routing and traces; the message may
+    be shown to users but is not traced unless content tracing is enabled.
+    """
+    CATEGORIES = frozenset({"unknown", "rate_limited", "server_error", "auth", "request_rejected",
+                            "network", "malformed_response", "incomplete_response", "provider_error"})
+
+    def __init__(self, message="", category="unknown"):
+        if category not in self.CATEGORIES:
+            raise ValueError(f"unknown ModelError category: {category}")
+        super().__init__(message)
+        self.category = category
+
+
+def _http_category(code):
+    if code == 429:
+        return "rate_limited"
+    if code in (401, 403):
+        return "auth"
+    return "server_error" if code >= 500 else "request_rejected"
 
 
 class NoModelRedirects(urllib.request.HTTPRedirectHandler):
@@ -77,23 +97,23 @@ class HTTPModel:
                     try:
                         return self._read_stream(resp, on_text)
                     except (http.client.IncompleteRead, OSError) as e:   # dropped connection or read timeout
-                        raise ModelError("stream interrupted by a connection or read failure") from e
+                        raise ModelError("stream interrupted by a connection or read failure", "network") from e
                     except (ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
                         # Provider data is untrusted; don't include malformed content in the error.
-                        raise ModelError("malformed model response") from e
+                        raise ModelError("malformed model response", "malformed_response") from e
             except urllib.error.HTTPError as e:
                 e.close()                          # never read or retain provider diagnostic bodies
                 if e.code in self.RETRYABLE and attempt < 3:
                     time.sleep(2 ** attempt)        # exponential backoff: 1s, 2s, 4s
                     continue
-                raise ModelError(f"API error {e.code}") from None
+                raise ModelError(f"API error {e.code}", _http_category(e.code)) from None
             except urllib.error.URLError as e:
                 if attempt < 3:
                     time.sleep(2 ** attempt)
                     continue
-                raise ModelError("network error: could not connect to the model API") from e
+                raise ModelError("network error: could not connect to the model API", "network") from e
             except (OSError, http.client.HTTPException) as e:
-                raise ModelError("connection failed before receiving a complete response") from e
+                raise ModelError("connection failed before receiving a complete response", "network") from e
 
 
 def _tool_result_text(block):
@@ -164,9 +184,9 @@ class AnthropicModel(HTTPModel):
             elif kind == "message_stop":
                 done = True
             elif kind == "error":                               # e.g. overloaded_error mid-stream
-                raise ModelError("model API stream reported an error")
+                raise ModelError("model API stream reported an error", "provider_error")
         if not done:
-            raise ModelError("stream ended before message_stop")
+            raise ModelError("stream ended before message_stop", "incomplete_response")
         return {"stop_reason": msg.get("stop_reason"),
                 "content": [blocks[i] for i in sorted(blocks)],
                 "usage": msg.get("usage"),
@@ -222,11 +242,11 @@ class OpenAIResponsesModel(HTTPModel):
             elif kind in ("response.completed", "response.incomplete"):
                 final = ev["response"]
             elif kind == "response.failed":
-                raise ModelError("model API response failed")
+                raise ModelError("model API response failed", "provider_error")
             elif kind == "error":
-                raise ModelError("model API stream reported an error")
+                raise ModelError("model API stream reported an error", "provider_error")
         if final is None:
-            raise ModelError("stream ended before response.completed")
+            raise ModelError("stream ended before response.completed", "incomplete_response")
         return self.parse(final)
 
     @staticmethod
@@ -319,7 +339,7 @@ class OpenAIChatModel(HTTPModel):
                 break
             ev = json.loads(data)
             if ev.get("error"):
-                raise ModelError("model API stream reported an error")
+                raise ModelError("model API stream reported an error", "provider_error")
             usage = ev.get("usage") or usage
             for choice in ev.get("choices") or []:
                 delta = choice.get("delta") or {}
@@ -335,7 +355,7 @@ class OpenAIChatModel(HTTPModel):
                     call["arguments"] += fn.get("arguments") or ""
                 finish = choice.get("finish_reason") or finish
         if not done:
-            raise ModelError("stream ended before [DONE]")
+            raise ModelError("stream ended before [DONE]", "incomplete_response")
         content = [{"type": "text", "text": "".join(text)}] if text else []
         truncated = []
         for i in sorted(calls):
