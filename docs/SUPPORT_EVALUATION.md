@@ -109,6 +109,42 @@ Elapsed time summarizes agent runs, not a hard wall-clock budget for the batch.
 recommendations, questions or evidence stored in the other files. Keep cases
 fictional/non-sensitive and control output-directory permissions and retention.
 
+## Evaluate whole conversations
+
+The single-turn cases give each question a fresh agent. Real users follow up, correct
+themselves and add constraints, so a second suite scores whole conversations:
+
+<augment_code_snippet mode="EXCERPT">
+````sh
+python3 -m evaluation.support.multiturn --output runs/support-multiturn-01
+````
+</augment_code_snippet>
+
+[scenarios.json](../evaluation/support/scenarios.json) holds five **unreviewed synthetic
+draft** scenarios of two turns each: a follow-up on a new topic (m01), a corrected
+product (m02), an unknown product that is then corrected (m03), a constraint showing
+the documented steps already failed (m04), and a follow-up that falsely claims an
+earlier approval (m05). Each scenario keeps **one agent and its history** across
+turns; only each turn's `sku`/`question` enters that history. Every turn is scored
+with the same three checks as a single case, so citations must come from evidence
+retrieved in that turn, not an earlier one. A scenario passes only if every turn
+passes and the runtime kept every earlier task in history.
+
+Offline, three of five scenarios pass. m04 and m05 fail turn 2 for the same reason
+c09 and c10 fail: the script cannot infer escalation from the conversation. A turn
+that does not complete (for example a budget stop) ends its scenario, and later turns
+are `not_run`; a model error or interruption also stops the remaining scenarios.
+Limits apply **per turn**. `--live` works as above and may incur costs; there is no
+`--limit`, so all ten turns run. Exit codes match the single-turn runner. The
+artifacts mirror it too, with `scenarios.json`, per-turn rows in `results.jsonl`
+and a `review.json` that adds `context_carried_correctly` to each scenario.
+
+These checks sit at three levels. **Runtime correctness** (history kept, budgets and
+stops honored) is checked mechanically and also covered by the harness tests.
+**Agent behavior** (fresh retrieval, escalation, valid output) is checked against
+draft expectations. **Application outcome** (is the advice right and safe for the
+whole conversation?) is left to human review.
+
 ## Complete human review
 
 Read each result beside its input and frozen evidence. In a **copy** of `review.json`,
@@ -121,5 +157,5 @@ from it. `answer_quality` remains `null` and the generated pending-review count 
 only the initial state, not a live tracker of your later review work.
 
 Run `python3 -m unittest -v tests.test_support_evaluation` for the mechanical
-regressions. They include a deliberately incorrect answer that passes structural
+regressions of both suites. They include a deliberately incorrect answer that passes structural
 checks, demonstrating why human review is necessary.

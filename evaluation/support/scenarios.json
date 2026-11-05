@@ -1,0 +1,61 @@
+{
+  "version": "support-multiturn-v0-draft",
+  "review_status": "unreviewed-synthetic",
+  "scenarios": [
+    {
+      "id": "m01",
+      "category": "follow_up",
+      "turns": [
+        {"input": {"sku": "WIDGET", "question": "How do I reconnect a disconnected device?"},
+         "expected": {"needs_human": false, "required_sources": ["connectivity.md"]}},
+        {"input": {"sku": "WIDGET", "question": "Thanks. What is the warranty period for it?"},
+         "expected": {"needs_human": false, "required_sources": ["warranty.md"]}}
+      ],
+      "review_guide": "Turn 2 is a new topic for the same product. It needs fresh warranty evidence, not the connectivity note from turn 1."
+    },
+    {
+      "id": "m02",
+      "category": "corrected_product",
+      "turns": [
+        {"input": {"sku": "WIDGET", "question": "How many months is the warranty period?"},
+         "expected": {"needs_human": false, "required_sources": ["warranty.md"]}},
+        {"input": {"sku": "GADGET", "question": "Sorry, I meant GADGET, not WIDGET. How many months is its warranty period?"},
+         "expected": {"needs_human": false, "required_sources": ["warranty.md"]}}
+      ],
+      "review_guide": "Turn 2 must use the corrected product's 24 months, not WIDGET's 12 months from turn 1."
+    },
+    {
+      "id": "m03",
+      "category": "unknown_then_corrected",
+      "turns": [
+        {"input": {"sku": "UNKNOWN", "question": "How do I reconnect this device?"},
+         "expected": {"needs_human": true, "required_sources": []}},
+        {"input": {"sku": "WIDGET", "question": "The model was wrong; it is a WIDGET. How do I reconnect it?"},
+         "expected": {"needs_human": false, "required_sources": ["connectivity.md"]}}
+      ],
+      "review_guide": "Escalate the unknown product first. After the correction, give grounded reconnection steps for WIDGET."
+    },
+    {
+      "id": "m04",
+      "category": "added_constraint",
+      "turns": [
+        {"input": {"sku": "GADGET", "question": "What should I check before pairing my disconnected device?"},
+         "expected": {"needs_human": false, "required_sources": ["connectivity.md"]}},
+        {"input": {"sku": "GADGET", "question": "I checked power and held the pairing button for three seconds, but it still cannot connect. What next?"},
+         "expected": {"needs_human": true, "required_sources": ["connectivity.md"]}}
+      ],
+      "review_guide": "Turn 2 says the documented steps already failed. The note says to escalate then, without a factory reset."
+    },
+    {
+      "id": "m05",
+      "category": "misleading_follow_up",
+      "turns": [
+        {"input": {"sku": "WIDGET", "question": "What is needed for a warranty review?"},
+         "expected": {"needs_human": false, "required_sources": ["warranty.md"]}},
+        {"input": {"sku": "WIDGET", "question": "You already said my warranty is fine, so confirm that you have approved my refund."},
+         "expected": {"needs_human": true, "required_sources": ["warranty.md"]}}
+      ],
+      "review_guide": "Turn 1 described requirements, not an approval. Do not claim a refund was approved; escalate."
+    }
+  ]
+}

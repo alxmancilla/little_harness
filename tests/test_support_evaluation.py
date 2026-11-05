@@ -7,7 +7,7 @@ import sys
 from unittest import mock
 
 from examples import support_agent as app
-from evaluation.support import dataset as data, evaluate as e
+from evaluation.support import dataset as data, evaluate as e, multiturn as mt
 from harness import ModelError, RunLimits
 from tests.helpers import Model, REPO, RecordingModel, TemporaryDirectoryTestCase, reply, tool_calls, used
 
@@ -227,3 +227,80 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
             summary = json.loads((self.root / str(index) / "summary.json").read_text())
             self.assertEqual(summary["mode"], "live")
             self.assertIsNone(summary["answer_quality"])
+
+
+class MultiTurnEvaluationTests(TemporaryDirectoryTestCase):
+    def rows(self, name="run"):
+        return [json.loads(line) for line in (self.root / name / "results.jsonl").read_text().splitlines()]
+
+    def test_scenarios_are_a_small_unreviewed_draft_and_bad_shapes_are_rejected(self):
+        original = data.load_scenarios()
+        self.assertEqual(original["review_status"], "unreviewed-synthetic")
+        self.assertEqual(len(original["scenarios"]), 5)
+        self.assertTrue(all(2 <= len(s["turns"]) <= 6 for s in original["scenarios"]))
+        mutations = [lambda d: d.update(version="support-v0-draft"),
+                     lambda d: d["scenarios"][0].update(id="c01"),
+                     lambda d: d["scenarios"][1].update(id=d["scenarios"][0]["id"]),
+                     lambda d: d["scenarios"][0].update(turns=d["scenarios"][0]["turns"][:1]),
+                     lambda d: d["scenarios"][0]["turns"][0]["input"].update(expected="label"),
+                     lambda d: d["scenarios"][0]["turns"][1]["expected"].update(required_sources=["private.md"])]
+        for index, mutate in enumerate(mutations):
+            dataset = copy.deepcopy(original)
+            mutate(dataset)
+            path = self.root / f"bad-{index}.json"
+            path.write_text(json.dumps(dataset))
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                data.load_scenarios(path)
+
+    def test_offline_run_scores_every_turn_keeps_history_and_discloses_scripted_limits(self):
+        dataset = data.load_scenarios()
+        for scenario in dataset["scenarios"]:
+            scenario["review_guide"] = "HOST-ONLY-EXPECTATION-SENTINEL"
+        seen = []
+
+        class Spy(app.OfflineModel):
+            def __call__(self, system, messages, tools, on_text=None):
+                assert "HOST-ONLY-EXPECTATION-SENTINEL" not in json.dumps([system, messages, tools])
+                if isinstance(messages[-1]["content"], str):
+                    seen.append(sum(m["role"] == "user" and isinstance(m["content"], str) for m in messages))
+                return super().__call__(system, messages, tools, on_text)
+
+        with mock.patch.object(mt, "load_scenarios", return_value=dataset), \
+                mock.patch.object(mt, "make_model", side_effect=AssertionError("network forbidden")):
+            summary = mt.run_evaluation(self.root / "run", model_factory=Spy)
+        self.assertEqual(seen, [1, 2] * 5)  # Each later turn sees the earlier task in the same history.
+        self.assertEqual((summary["scenarios"], summary["turns"], summary["history_retained"]), (5, 10, 5))
+        self.assertEqual(summary["turn_checks_passed"]["valid_output"], 10)
+        self.assertEqual(summary["scenarios_passed"], 3)  # The script cannot infer escalation from a follow-up.
+        self.assertIsNone(summary["answer_quality"])
+        rows = {row["id"]: row for row in self.rows()}
+        self.assertEqual({key for key, row in rows.items() if not row["passed"]}, {"m04", "m05"})
+        self.assertFalse(rows["m04"]["turns"][1]["checks"]["escalation_matches_draft"])
+        self.assertEqual(rows["m02"]["turns"][1]["recommendation"]["sku"], "GADGET")
+        output = self.root / "run"
+        contract = json.loads((output / "run.json").read_text())
+        for artifact, field in (("scenarios.json", "dataset_sha256"), ("evidence.json", "evidence_sha256")):
+            self.assertEqual(hashlib.sha256((output / artifact).read_bytes()).hexdigest(), contract[field])
+        review = json.loads((output / "review.json").read_text())
+        self.assertTrue(all(item["context_carried_correctly"] is None for item in review["scenarios"]))
+        self.assertIn("not an answer-quality or safety score", (output / "report.md").read_text())
+        for trace in output.glob("m*/trace.jsonl"):
+            events = [json.loads(line) for line in trace.read_text().splitlines()]
+            self.assertTrue(all(not {"text", "content", "input", "output", "error"} & event.keys() for event in events))
+        with self.assertRaises(FileExistsError):
+            mt.run_evaluation(output)
+
+    def test_incomplete_turn_stops_its_scenario_and_model_error_stops_the_run(self):
+        budget = mt.run_evaluation(self.root / "budget", limits=RunLimits(max_tool_calls=0))
+        self.assertEqual(budget["halted"], False)
+        for row in self.rows("budget"):
+            self.assertEqual([t["status"] for t in row["turns"]], ["stopped", "not_run"])
+            self.assertFalse(row["passed"])
+        summary = mt.run_evaluation(self.root / "error", model_factory=lambda: RecordingModel(
+            ModelError("PRIVATE-DIAGNOSTIC-SENTINEL", "rate_limited")))
+        self.assertTrue(summary["halted"])
+        rows = self.rows("error")
+        self.assertEqual([t["status"] for t in rows[0]["turns"]], ["model_error", "not_run"])
+        self.assertTrue(all(t["status"] == "not_run" for row in rows[1:] for t in row["turns"]))
+        artifacts = "".join(path.read_text() for path in (self.root / "error").rglob("*") if path.is_file())
+        self.assertNotIn("PRIVATE-DIAGNOSTIC-SENTINEL", artifacts)

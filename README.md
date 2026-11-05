@@ -203,7 +203,9 @@ Data and policies are fictional; scripted success is not an accuracy evaluation.
 
 Next, [evaluate the support assistant](docs/SUPPORT_EVALUATION.md) with twelve
 synthetic draft cases: `python3 -m evaluation.support.evaluate --output runs/support-smoke-01`.
-The runner is offline by default, preserves prior runs and separates mechanical
+To score whole conversations (follow-ups, corrections, added constraints), run the five
+multi-turn scenarios: `python3 -m evaluation.support.multiturn --output runs/support-multiturn-01`.
+Both runners are offline by default, preserve prior runs and separate mechanical
 checks from unscored human review. Paid model calls require explicit `--live`.
 
 ### Execution controls
