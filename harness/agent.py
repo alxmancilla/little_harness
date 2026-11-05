@@ -99,73 +99,91 @@ class Agent:
                  journal_path=None, on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
                  trace_include_content=False, compact_at_tokens=None):
-        if compact_at_tokens is not None and (type(compact_at_tokens) is not int or compact_at_tokens <= 0):
-            raise ValueError("compact_at_tokens must be a positive integer or None")
-        self.compact_at_tokens = compact_at_tokens
-        # (reported input_tokens, message characters sent) from the latest main model call.
-        self._context_usage = None
-        if not isinstance(tools, Mapping):
-            raise TypeError("tools must be an explicit mapping; use {} for no tools")
-        if type(max_tool_output) is not int or max_tool_output <= 0:
-            raise ValueError("max_tool_output must be a positive integer")
-        self.max_tool_output = max_tool_output
-        self.writable_roots = tuple(Path(root).resolve() for root in writable_roots)
-        if limits is not None and not isinstance(limits, RunLimits):
-            raise TypeError("limits must be RunLimits or None")
-        if on_event is not None and not callable(on_event):
-            raise TypeError("on_event must be callable or None")
-        if tool_admission is not None and not callable(tool_admission):
-            raise TypeError("tool_admission must be callable or None")
+        self.model, self.system, self.max_steps = model, system, max_steps
+        self._configure_observability(trace_path, trace_context, trace_include_content,
+                                      on_event, event_include_content, quiet)
+        self._configure_tools(tools, tool_policy, tool_admission, approve,
+                              max_tool_output, tool_timeout_seconds, writable_roots)
+        self._configure_context(compact_at, compact_at_tokens, session_path)
+        self._configure_controls(limits, journal_path)
+        # Per-run state, reset by run_result().
+        self._budget = None
+        self._event_run_id, self._event_step, self._event_sequence = None, None, 0
+        # Journal action in flight, read only when an exception interrupts dispatch.
+        self._active_action_id = self._journal_run_id = None
+        self.messages = self._load()
+
+    def _configure_observability(self, trace_path, trace_context, trace_include_content,
+                                 on_event, event_include_content, quiet):
+        """Trace file, event callback and console output; none can authorize execution."""
         if trace_context is not None and (not isinstance(trace_context, Mapping)
                 or any(type(key) is not str for key in trace_context)
                 or {"ts", "kind", "run_id"} & trace_context.keys()):
             raise ValueError("trace_context must be a mapping with non-reserved string keys")
-        self.trace_context = json.loads(json.dumps(dict(trace_context or {}), allow_nan=False))
         if type(trace_include_content) is not bool:
             raise TypeError("trace_include_content must be a boolean")
-        self.trace_include_content = trace_include_content
-        self.tool_admission = tool_admission
+        if on_event is not None and not callable(on_event):
+            raise TypeError("on_event must be callable or None")
         if type(event_include_content) is not bool or type(quiet) is not bool:
             raise TypeError("event_include_content and quiet must be booleans")
+        self.trace_path = Path(trace_path)
+        self.trace_context = json.loads(json.dumps(dict(trace_context or {}), allow_nan=False))
+        self.trace_include_content = trace_include_content
         self.on_event, self.event_include_content, self.quiet = on_event, event_include_content, quiet
         self.event_callback_failed = False
-        self._event_run_id, self._event_step, self._event_sequence = None, None, 0
-        self.tool_timeout_seconds = validate_tool_timeout(tool_timeout_seconds)
-        # Journal action in flight, read only when an exception interrupts dispatch.
-        self._active_action_id = self._journal_run_id = None
-        self.model = model
-        self.system = system
-        # Snapshot membership; functions and trusted entry metadata remain application-owned.
-        self.tools = dict(tools)
+
+    def _configure_tools(self, tools, tool_policy, tool_admission, approve,
+                         max_tool_output, tool_timeout_seconds, writable_roots):
+        """The tool mapping and every gate that decides whether a request may run."""
+        if not isinstance(tools, Mapping):
+            raise TypeError("tools must be an explicit mapping; use {} for no tools")
         if tool_policy is not None and not isinstance(tool_policy, ToolPolicy):
             raise TypeError("tool_policy must be ToolPolicy or None")
-        self.tool_policy = tool_policy
+        if tool_admission is not None and not callable(tool_admission):
+            raise TypeError("tool_admission must be callable or None")
+        if type(max_tool_output) is not int or max_tool_output <= 0:
+            raise ValueError("max_tool_output must be a positive integer")
+        # Snapshot membership; functions and trusted entry metadata remain application-owned.
+        self.tools = dict(tools)
         if tool_policy is not None:
             tool_policy.validate_tools(self.tools)
-        self.max_steps = max_steps
-        self.approve = (lambda *_: False) if quiet and approve is ask_human else approve
-        self.trace_path = Path(trace_path)
-        self.compact_at = compact_at
+        self.tool_policy, self.tool_admission = tool_policy, tool_admission
+        self.approve = (lambda *_: False) if self.quiet and approve is ask_human else approve
+        self.max_tool_output = max_tool_output
+        self.tool_timeout_seconds = validate_tool_timeout(tool_timeout_seconds)
+        self.writable_roots = tuple(Path(root).resolve() for root in writable_roots)
+
+    def _configure_context(self, compact_at, compact_at_tokens, session_path):
+        """Conversation persistence and compaction thresholds."""
+        if compact_at_tokens is not None and (type(compact_at_tokens) is not int or compact_at_tokens <= 0):
+            raise ValueError("compact_at_tokens must be a positive integer or None")
+        self.compact_at, self.compact_at_tokens = compact_at, compact_at_tokens
+        self._size_after_compact = 0
+        # (reported input_tokens, message characters sent) from the latest main model call.
+        self._context_usage = None
         self.session_path = Path(session_path) if session_path else None
         # Append-only record of messages that compaction replaced; sessions only.
         self.compaction_archive_path = (self.session_path.with_name(self.session_path.name + ".compacted.jsonl")
                                         if self.session_path is not None else None)
-        self.journal = ExecutionJournal(journal_path) if journal_path is not None else None
-        if self.journal is not None:
-            reserved = {self.trace_path.resolve()}
-            if self.session_path is not None:
-                reserved.update((self.session_path.resolve(),
-                                 self.session_path.with_name(self.session_path.name + ".tmp").resolve(),
-                                 self.compaction_archive_path.resolve()))
-            journal_files = {Path(str(self.journal.path) + suffix)
-                             for suffix in ("", "-journal", "-wal", "-shm")}
-            if (any(path.is_relative_to(root) for path in journal_files for root in self.writable_roots)
-                    or journal_files & reserved):
-                raise ValueError("journal must be outside the writable workspace and separate from trace/session files")
-        self.messages = self._load()
-        self._size_after_compact = 0
+
+    def _configure_controls(self, limits, journal_path):
+        """Per-task budgets and the optional crash-recovery journal, opened last."""
+        if limits is not None and not isinstance(limits, RunLimits):
+            raise TypeError("limits must be RunLimits or None")
         self.limits = limits if limits is not None else RunLimits()
-        self._budget = None
+        self.journal = ExecutionJournal(journal_path) if journal_path is not None else None
+        if self.journal is None:
+            return
+        reserved = {self.trace_path.resolve()}
+        if self.session_path is not None:
+            reserved.update((self.session_path.resolve(),
+                             self.session_path.with_name(self.session_path.name + ".tmp").resolve(),
+                             self.compaction_archive_path.resolve()))
+        journal_files = {Path(str(self.journal.path) + suffix)
+                         for suffix in ("", "-journal", "-wal", "-shm")}
+        if (any(path.is_relative_to(root) for path in journal_files for root in self.writable_roots)
+                or journal_files & reserved):
+            raise ValueError("journal must be outside the writable workspace and separate from trace/session files")
 
     def _print(self, *args, **kwargs):
         if not self.quiet:
