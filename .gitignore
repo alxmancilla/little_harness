@@ -7,7 +7,8 @@
 trace.jsonl
 inventory-trace.jsonl
 support-trace.jsonl
-*.json
+session.json
+*.session.json
 *.json.tmp
 workspace/
 runs/
@@ -15,13 +16,6 @@ execution.sqlite3
 execution.sqlite3-journal
 execution.sqlite3-wal
 execution.sqlite3-shm
-
-# Intentionally versioned public HotpotQA exercises, NOT runtime sessions or credentials
-!/datasets/hotpotqa/*.json
-
-# Intentionally versioned synthetic support evaluation cases
-!/evaluation/support/cases.json
-!/evaluation/support/scenarios.json
 
 # Full development data is downloaded locally, not vendored into the repository
 /datasets/hotpotqa-dev/
