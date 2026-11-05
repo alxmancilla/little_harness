@@ -37,6 +37,9 @@ linguistic tokenization. These word counts are also **not model token counts**.
 derives the tool name from the function name and its description from the docstring.
 The `text: str` parameter becomes a required string argument; extra arguments are
 not allowed. The runtime supports a limited flat schema, not every JSON Schema feature.
+Two optional annotations add detail: `Literal["asc", "desc"]` limits an argument to
+fixed choices that the runtime enforces, and `Annotated[str, "words to count"]`
+gives the model a description of that argument. This lab does not need either.
 
 Registration in [lab01_loop.py](lab01_loop.py) is equivalent to:
 

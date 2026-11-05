@@ -200,8 +200,14 @@ guided labs**:
    consent and bounded calls. Never share keys, private prompts or sensitive traces.
 5. Learn [evaluation](datasets/HOTPOTQA_BASELINE.md): keep expected answers outside
    agent input, reserve untouched cases and compare quality against calls/tokens/time.
+   The [support evaluation](docs/SUPPORT_EVALUATION.md) also scores whole offline
+   conversations, where a follow-up turn corrects or adds to an earlier one.
 6. Compare single and multiple agents only after establishing a baseline; more
    agents do not automatically mean better results.
+7. Handle [long conversations](docs/REFERENCE.md#traces-sessions-and-compaction):
+   `compact_at_tokens` keeps each model request small while the saved history stays
+   complete, and `get_steering` lets a person add guidance between tool batches.
+   A summary can lose details, and steering text is guidance, not permission.
 
 ## For instructors and study groups
 
