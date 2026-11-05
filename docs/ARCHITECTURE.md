@@ -110,7 +110,7 @@ the private result protocol is separate from tool printing.
 The timeout covers startup/import/execution/transfer after launch, with bounded
 best-effort cleanup overhead. On POSIX, cleanup targets the worker process group;
 other platforms stop only the worker. Both modes inherit application access to files,
-credentials and network. Detached descendants/remote operations can outlive cleanup.
+credentials and network; `worker_env=` can replace a worker's environment variables. Detached descendants/remote operations can outlive cleanup.
 
 ## 4. State, persistence and recovery
 

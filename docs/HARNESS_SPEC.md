@@ -216,6 +216,9 @@ wait MUST use the smaller of tool timeout and remaining task deadline. Unsupport
 callables MUST fail rather than silently run inline. Timed functions MUST be importable
 module-level functions or standard-library `functools.partial` bindings of them with
 JSON-only values; arguments/bindings travel over stdin, not command arguments.
+Workers MUST inherit a copy of the parent environment unless the application passes
+`worker_env`, a string-to-string mapping that then becomes their entire environment
+(on Windows, `SYSTEMROOT` is kept so Python can start). Inline tools are unaffected.
 
 Timeout, loss of a trustworthy result or uncertain risky failure MUST stop subsequent
 work without retry. Cleanup is bounded/best-effort; parent-memory mutation does not
@@ -419,7 +422,7 @@ wait. This is a single-owner recovery aid, not a concurrent scheduler. Keep the 
 journal across restarts; switching/removing it bypasses recovery protection.
 
 Read-only tools can disclose data. Workers inherit credentials, filesystem and
-network access. Predicates, callbacks, approval and inline tools can block indefinitely;
+network access; `worker_env` can withhold environment credentials only. Predicates, callbacks, approval and inline tools can block indefinitely;
 task deadlines cannot preempt them. Worker cleanup cannot undo remote work or guarantee
 termination of detached descendants. Content-enabled traces, sessions (which keep the
 full history), results and ordinary inline tool errors may contain sensitive data. Metadata-only traces/events

@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -19,6 +20,16 @@ def validate_tool_timeout(value):
     if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or value <= 0):
         raise ValueError("tool timeout must be a finite positive number or None")
     return value
+
+
+def validate_worker_env(value):
+    """None inherits the parent environment; a mapping replaces it for timed tools."""
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or any(type(key) is not str or type(item) is not str
+                                             for key, item in value.items()):
+        raise TypeError("worker_env must be a mapping of strings to strings, or None")
+    return dict(value)
 
 
 @dataclass(frozen=True)
@@ -81,11 +92,12 @@ def _stop_worker(process):
         pass
 
 
-def run_isolated_tool(fn, args, timeout_seconds, max_output, *, risky=False):
+def run_isolated_tool(fn, args, timeout_seconds, max_output, *, risky=False, env=None):
     """Return a bounded result, never retry. Tool arguments travel over stdin, not argv."""
     validate_tool_timeout(timeout_seconds)
     if timeout_seconds is None:
         raise ValueError("isolated execution requires a positive timeout")
+    env = validate_worker_env(env)
     started = time.monotonic()
     try:
         payload = {**_descriptor(fn), "args": args, "max_output": max_output,
@@ -95,7 +107,11 @@ def run_isolated_tool(fn, args, timeout_seconds, max_output, *, risky=False):
         return ToolOutcome("failed", "timed tool requires an importable module-level function and JSON arguments", True)
     process = None
     try:
-        env = dict(os.environ)
+        if env is None:
+            env = dict(os.environ)
+        elif os.name == "nt" and "SYSTEMROOT" in os.environ:
+            # Windows Python cannot start without SYSTEMROOT.
+            env.setdefault("SYSTEMROOT", os.environ["SYSTEMROOT"])
         process = subprocess.Popen([sys.executable, str(Path(__file__).resolve())],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                    env=env, start_new_session=os.name == "posix")

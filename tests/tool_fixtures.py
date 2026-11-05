@@ -31,6 +31,10 @@ def change_memory():
     return len(LOCAL_STATE)
 
 
+def read_env(name: str):
+    return os.environ.get(name, "<unset>")
+
+
 def record_action(path: str, mode: str = "done"):
     with Path(path).open("a", encoding="utf-8") as target:
         target.write(mode + "\n")

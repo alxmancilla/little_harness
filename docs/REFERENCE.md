@@ -73,6 +73,7 @@ budget, timeout, policy or journal settings.
 | Observation | `on_event=callback` | Synchronous immutable events; metadata-only unless content is explicitly enabled |
 | Trace privacy | `trace_include_content=False` | JSONL metadata only by default; content opt-in is independent of event settings |
 | Tool timeouts | `tool_timeout_seconds=` or tool decorator | Worker processes do not provide security isolation |
+| Worker environment | `worker_env={...}` | Replaces the environment of timed-tool workers only; inline tools still see the parent's |
 | Crash recovery | `journal_path=` | Human-reviewed outcomes, not automatic replay or exactly-once effects |
 | Conversation persistence | `session_path=` | Saved history alone cannot establish whether an action completed |
 | Between-step steering | `get_steering=callable` | Called only after a saved tool batch; text guides the model but cannot authorize tools or cancel a running one |
@@ -95,6 +96,10 @@ Closures, lambdas and bound methods are rejected, never silently run inline.
 Workers use the smaller of the tool timeout and remaining task deadline; bounded
 cleanup adds time. Parent-memory changes do not propagate. Workers inherit process
 access, including environment, filesystem and network: **this is not an OS sandbox**.
+To keep API keys and other secrets out of timed tools, pass `worker_env=` with only
+the variables they need, for example `{"PATH": os.environ["PATH"]}`. The mapping
+becomes the worker's whole environment (Windows also keeps `SYSTEMROOT`); `None`, the
+default, copies the parent environment. It does not limit files, network or inline tools.
 Cleanup is best-effort, including POSIX process-group cleanup where available.
 
 A timeout or uncertain outcome stops further work without automatic retry. A write

@@ -42,6 +42,19 @@ class WorkerTests(f.HarnessTestCase):
                 self.assertTrue(result.is_error)
                 self.assertNotIn("exception-detail", result.output)
 
+    def test_worker_env_replaces_the_inherited_environment(self):
+        with mock.patch.dict(os.environ, {"HARNESS_TEST_SECRET": "parent-secret"}):
+            self.assertEqual(self.execute(tools.read_env, {"name": "HARNESS_TEST_SECRET"}).output,
+                             "parent-secret")
+            restricted = {"HARNESS_TEST_VISIBLE": "yes"}
+            self.assertEqual(self.execute(tools.read_env, {"name": "HARNESS_TEST_SECRET"}, env=restricted).output,
+                             "<unset>")
+            self.assertEqual(self.execute(tools.read_env, {"name": "HARNESS_TEST_VISIBLE"}, env=restricted).output,
+                             "yes")
+        for invalid in (["A=1"], {"A": 1}, {1: "a"}):
+            with self.subTest(env=invalid), self.assertRaises(TypeError):
+                self.execute(tools.echo, {"value": "hello"}, env=invalid)
+
     def test_closures_and_callable_objects_are_not_silently_executed_inline(self):
         local = mock.Mock()
         for fn in (local, lambda: local()):
@@ -183,6 +196,20 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         self.assertIn("configuration", outcome.output)
         execute.assert_not_called()
         approve.assert_called_once()
+
+    def test_agent_worker_env_reaches_timed_workers_only(self):
+        self.register_tool(tools.read_env)
+        calls = f.tool_calls(("a", "read_env", {"name": "HARNESS_TEST_SECRET"}),
+                             ("b", "read_env", {"name": "HARNESS_TEST_VISIBLE"}))
+        with mock.patch.dict(os.environ, {"HARNESS_TEST_SECRET": "parent-secret"}):
+            agent = self.agent([calls, f.reply("done")], tool_timeout_seconds=3,
+                               worker_env={"HARNESS_TEST_VISIBLE": "yes"})
+            self.assertEqual(agent.run_result("go").status, "completed")
+            inline = self.agent([], worker_env={})
+            self.assertEqual(inline._run_tool(calls["content"][0]).output, "parent-secret")
+        self.assertEqual([r["content"] for r in agent.messages[2]["content"]], ["<unset>", "yes"])
+        with self.assertRaises(TypeError):
+            self.agent([], worker_env={"HARNESS_TEST_VISIBLE": None})
 
     def test_per_tool_override_does_not_change_the_advertised_schema(self):
         self.tools.tool(timeout_seconds=0.25)(tools.echo)

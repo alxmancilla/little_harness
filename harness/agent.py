@@ -13,7 +13,8 @@ from .journal import ExecutionJournal, JournalError
 from .events import RunEvent
 from .runtime import BudgetExceeded, ExecutionBudget, RunLimits, RunResult
 from .model_clients import ModelError
-from .tool_execution import ToolExecutionStopped, ToolOutcome, run_isolated_tool, validate_tool_timeout
+from .tool_execution import (ToolExecutionStopped, ToolOutcome, run_isolated_tool, validate_tool_timeout,
+                             validate_worker_env)
 from .policy import PolicyDecision, ToolPolicy
 from .session import SessionFile
 
@@ -128,18 +129,20 @@ class Agent:
     or characters alone, at CHARS_PER_TOKEN characters per token.
     get_steering(), when set, is called after each saved tool batch; nonempty returned
     text is added to that user turn before the next model call. It cannot authorize tools.
+    worker_env, when set, is the complete environment of timed-tool workers instead of a
+    copy of os.environ. Inline tools still see the parent environment. It is not a sandbox.
     """
 
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
                  compact_at=40000, session_path=None, *, tools, limits=None, tool_timeout_seconds=None,
                  journal_path=None, on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
-                 trace_include_content=False, compact_at_tokens=None, get_steering=None):
+                 trace_include_content=False, compact_at_tokens=None, get_steering=None, worker_env=None):
         self.model, self.system, self.max_steps = model, system, max_steps
         self._configure_observability(trace_path, trace_context, trace_include_content,
                                       on_event, event_include_content, quiet)
         self._configure_tools(tools, tool_policy, tool_admission, approve,
-                              max_tool_output, tool_timeout_seconds, writable_roots)
+                              max_tool_output, tool_timeout_seconds, writable_roots, worker_env)
         self._configure_context(compact_at, compact_at_tokens, session_path)
         self._configure_controls(limits, get_steering, journal_path)
         # Per-run state, reset by run_result().
@@ -169,7 +172,7 @@ class Agent:
         self.event_callback_failed = False
 
     def _configure_tools(self, tools, tool_policy, tool_admission, approve,
-                         max_tool_output, tool_timeout_seconds, writable_roots):
+                         max_tool_output, tool_timeout_seconds, writable_roots, worker_env):
         """The tool mapping and every gate that decides whether a request may run."""
         if not isinstance(tools, Mapping):
             raise TypeError("tools must be an explicit mapping; use {} for no tools")
@@ -187,6 +190,7 @@ class Agent:
         self.approve = (lambda *_: False) if self.quiet and approve is ask_human else approve
         self.max_tool_output = max_tool_output
         self.tool_timeout_seconds = validate_tool_timeout(tool_timeout_seconds)
+        self.worker_env = validate_worker_env(worker_env)
         self.writable_roots = tuple(Path(root).resolve() for root in writable_roots)
 
     def _configure_context(self, compact_at, compact_at_tokens, session_path):
@@ -551,8 +555,9 @@ class Agent:
                    content={"input": call.get("input", {}), "output": output})
 
     def _execute_isolated(self, entry, args, timeout):
-        """One worker seam; the core has no application path/environment overrides."""
-        return run_isolated_tool(entry["fn"], args, timeout, self.max_tool_output, risky=entry["risky"])
+        """One worker seam; worker_env=None inherits the parent environment."""
+        return run_isolated_tool(entry["fn"], args, timeout, self.max_tool_output,
+                                 risky=entry["risky"], env=self.worker_env)
 
     def _invoke_tool(self, entry, args, timeout):
         """Invoke once; return (ToolOutcome, stop_reason). With journaling, a risky inline failure is uncertain."""
