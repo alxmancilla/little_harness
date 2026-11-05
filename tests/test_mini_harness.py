@@ -20,7 +20,7 @@ from tests.helpers import (HarnessTestCase, RecordingModel, compaction_history,
 from agents.teaching import TeachingConfig, create_tools, tools as teaching_tools
 from agents.teaching.config import load_env
 from agents.teaching.demos import rag_demo_model
-from harness import agent as h, model_clients as clients
+from harness import SessionLoadError, agent as h, model_clients as clients
 
 
 
@@ -450,7 +450,7 @@ class SessionTests(HarnessTestCase):
 
     def test_invalid_session_file_raises_without_overwriting_or_exiting(self):
         self.session.write_text("{not json")
-        with self.assertRaises(h.SessionLoadError) as caught:
+        with self.assertRaises(SessionLoadError) as caught:
             self.agent([], session_path=self.session)
         self.assertIsInstance(caught.exception, ValueError)
         self.assertIn("is not a valid session", str(caught.exception))
@@ -527,7 +527,7 @@ class CompactionTests(HarnessTestCase):
                      {"version": 2, "messages": messages, "compaction": "s"}):
             with self.subTest(data=data):
                 session.write_text(json.dumps(data))
-                with self.assertRaises(h.SessionLoadError):
+                with self.assertRaises(SessionLoadError):
                     self.agent([], session_path=session)
                 self.assertEqual(json.loads(session.read_text()), data)
 

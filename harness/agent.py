@@ -1,7 +1,6 @@
 """Reusable execution loop. Application prompts, tools and paths are explicit."""
 
 import json
-import os
 import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
@@ -16,12 +15,9 @@ from .runtime import BudgetExceeded, ExecutionBudget, RunLimits, RunResult
 from .model_clients import ModelError
 from .tool_execution import ToolExecutionStopped, ToolOutcome, run_isolated_tool, validate_tool_timeout
 from .policy import PolicyDecision, ToolPolicy
+from .session import SessionFile
 
 from .tools import validate_tool_input
-
-
-class SessionLoadError(ValueError):
-    """The session file exists but is not a valid session; it is left unchanged."""
 
 
 @dataclass(frozen=True)
@@ -62,7 +58,6 @@ SUMMARY_SYSTEM = (
 
 
 SUMMARY_PREFIX = "[Summary of the earlier conversation, compacted to save context. Not a new request.]\n"
-SESSION_VERSION = 2
 CHARS_PER_TOKEN = 4
 
 
@@ -203,6 +198,7 @@ class Agent:
         # (reported input_tokens, message characters sent) from the latest main model call.
         self._context_usage = None
         self.session_path = Path(session_path) if session_path else None
+        self._session = SessionFile(self.session_path) if self.session_path is not None else None
         # The model sees the summary, then history from _context_start; history itself is never shortened.
         self._context_start, self._context_summary = 0, None
 
@@ -218,9 +214,8 @@ class Agent:
         if self.journal is None:
             return
         reserved = {self.trace_path.resolve()}
-        if self.session_path is not None:
-            reserved.update((self.session_path.resolve(),
-                             self.session_path.with_name(self.session_path.name + ".tmp").resolve()))
+        if self._session is not None:
+            reserved.update((self._session.path.resolve(), self._session.tmp_path.resolve()))
         journal_files = {Path(str(self.journal.path) + suffix)
                          for suffix in ("", "-journal", "-wal", "-shm")}
         if (any(path.is_relative_to(root) for path in journal_files for root in self.writable_roots)
@@ -282,51 +277,22 @@ class Agent:
         return response
 
     def _load(self):
-        """Read a version 2 session object, or a legacy list of messages without compaction state."""
-        if not self.session_path or not self.session_path.exists():
+        """Restore history and the compaction point from the session file, if one exists."""
+        if self._session is None or not self._session.path.exists():
             return []
-        try:
-            data = json.loads(self.session_path.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                messages, compaction = data, None
-            elif isinstance(data, dict) and data.get("version") == SESSION_VERSION:
-                messages, compaction = data.get("messages"), data.get("compaction")
-                if not isinstance(messages, list):
-                    raise ValueError("expected a list of messages")
-            else:
-                raise ValueError(f"expected a list of messages or a version {SESSION_VERSION} session")
-            if compaction is not None:
-                start, summary = (compaction.get("start"), compaction.get("summary")) \
-                    if isinstance(compaction, dict) else (None, None)
-                if (type(start) is not int or not 0 < start <= len(messages)
-                        or type(summary) is not str or not summary):
-                    raise ValueError("invalid compaction state")
-                self._context_start, self._context_summary = start, summary
-        except ValueError as e:
-            raise SessionLoadError(f"{self.session_path} is not a valid session ({e}); "
-                                   "fix or delete it to start fresh") from None
+        messages, compaction = self._session.load()
+        if compaction is not None:
+            self._context_start, self._context_summary = compaction["start"], compaction["summary"]
         self._print(f"Resumed {len(messages)} messages from {self.session_path}")
         return messages
 
     def _save(self):
-        """Write atomically; journal-enabled runs fsync the file and parent directory."""
-        if not self.session_path:
+        """Write the session atomically; journal-enabled runs make it durable."""
+        if self._session is None:
             return
         compaction = (None if self._context_summary is None else
                       {"start": self._context_start, "summary": self._context_summary})
-        tmp = self.session_path.with_name(self.session_path.name + ".tmp")
-        with tmp.open("w", encoding="utf-8") as stream:
-            json.dump({"version": SESSION_VERSION, "messages": self.messages, "compaction": compaction}, stream)
-            if self.journal is not None:
-                stream.flush()
-                os.fsync(stream.fileno())
-        os.replace(tmp, self.session_path)
-        if self.journal is not None and os.name == "posix":
-            descriptor = os.open(self.session_path.parent, os.O_RDONLY)
-            try:
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
+        self._session.save(self.messages, compaction, durable=self.journal is not None)
 
     def _add_user_message(self, text):
         """Fold a resumed task into the last user turn when necessary."""

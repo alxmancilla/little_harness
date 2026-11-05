@@ -46,6 +46,7 @@ view below for the journal commit-before-invocation requirement.
 | `harness/runtime.py` | Immutable limits/usage/results and mutable per-task budget | Shared across main and summary calls; no provider dependency |
 | `harness/policy.py`: `ToolPolicy` | Explicit read-only declarations and argument predicates | Trusted, synchronous parent code; not authorization isolation |
 | `harness/tool_execution.py` | Callable descriptor, fresh worker, JSON protocol, timeout and cleanup | Module functions or JSON-bound partials; no closures/bound methods or parent-memory propagation |
+| `harness/session.py`: `SessionFile`, `SessionLoadError` | Load and atomically save version 2 session files (full history plus compaction point); reads legacy lists | No agent state; durable fsync only when the agent has a journal |
 | `harness/journal.py`: `ExecutionJournal` | Durable action metadata, recovery guard, inspect/resolve CLI | No arguments/outputs; no replay or rollback |
 | `harness/events.py`: `RunEvent` | Versioned, deeply immutable observation snapshots | Delivery/failure handling lives in `Agent._emit` |
 | `agents/teaching/` | Explicit config, tool/agent factories, arithmetic/files/retrieval tools, demos and CLI | Imports the public runtime; no configuration loading or workspace creation on import |

@@ -7,7 +7,8 @@ from .model_clients import (AnthropicModel, HTTPModel, ModelConfigError, ModelEr
                             OpenAIResponsesModel, make_model)
 from .policy import ToolPolicy
 
-from .agent import Agent, SessionLoadError
+from .agent import Agent
+from .session import SessionLoadError
 from .tools import ToolRegistry, validate_tool_input
 
 __all__ = ["Agent", "SessionLoadError", "ToolRegistry", "RunLimits", "RunResult", "RunUsage", "RunEvent",

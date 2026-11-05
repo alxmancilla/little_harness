@@ -9,7 +9,7 @@ from pathlib import Path
 # Keep this list in one place so extraction cannot silently bypass reference checks.
 SHARED_CODE_FILES = ("harness/__init__.py", "harness/__main__.py", "harness/agent.py", "harness/tools.py",
                      "harness/runtime.py", "harness/events.py", "harness/model_clients.py",
-                     "harness/tool_execution.py", "harness/journal.py", "harness/policy.py",
+                     "harness/tool_execution.py", "harness/journal.py", "harness/policy.py", "harness/session.py",
                      "agents/__init__.py", "agents/teaching/__init__.py", "agents/teaching/config.py",
                      "agents/teaching/tools.py", "agents/teaching/factory.py",
                      "agents/teaching/demos.py", "agents/teaching/cli.py",
