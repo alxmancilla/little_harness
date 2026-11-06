@@ -263,3 +263,4 @@ GitHub Actions runs the same command on Python 3.11 through 3.14 for every push 
 - [Tool policies and approval ordering](docs/TOOL_POLICIES.md)
 - [HotpotQA comparison workflow](datasets/HOTPOTQA_BASELINE.md)
 - [Separation contract](docs/HARNESS_SEPARATION_SPEC.md) and [migration checkpoints](docs/HARNESS_MIGRATION_PLAN.md)
+- Proposed: [storage specification](docs/STORAGE_SPEC.md) and [plan](docs/STORAGE_PLAN.md) for PostgreSQL and MongoDB state, journal and memory
