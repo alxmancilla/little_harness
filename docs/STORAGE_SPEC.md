@@ -3,8 +3,8 @@
 **Status:** proposed, revision 1. Implemented so far: the `SessionStore` and
 `ActionJournal` interfaces (3.1, 3.2) with their standard-library implementations,
 also described in the [harness specification](HARNESS_SPEC.md), and the PostgreSQL
-session store and journal (5.1, `stores/postgres.py`). MongoDB and memory are not
-implemented yet; see the [storage plan](STORAGE_PLAN.md). **Targets:** Python 3.11+,
+and MongoDB session stores and journals (5.1 `stores/postgres.py`, 5.2
+`stores/mongodb.py`). Memory is not implemented yet; see the [storage plan](STORAGE_PLAN.md). **Targets:** Python 3.11+,
 PostgreSQL 18, MongoDB 9.0 (replica set), psycopg 3.3, PyMongo 4.19.
 
 **MUST** denotes a required behavior once implemented; **MAY** an optional one.
@@ -249,6 +249,8 @@ get the same subcommands with the same output and confirmation rules:
 | Journal serialization | `begin` and `resolve` increment a counter on the `lh_journals` document inside the transaction. MongoDB detects only write-write conflicts, so this write is what stops two concurrent `begin` calls from both passing the check |
 | Memory search | Compound text index `{namespace: 1, text: "text"}` with `default_language: "none"`; the equality prefix makes every search name a namespace. `$text` matches any word; sort by `textScore`, then `created_at`, then `_id` |
 | Retries | Only the driver's labelled cases: `TransientTransactionError` reruns the whole transaction (nothing was committed) and `UnknownTransactionCommitResult` retries the commit, both within the 5-second bound. If the outcome is still unknown, the call fails; a journal `begin` then authorizes nothing |
+| Crashed writer | Transactions belong to logical sessions, not connections, so a process that dies mid-transaction leaves it open on the server, holding its uncommitted writes, until `transactionLifetimeLimitSeconds` (60 by default) or an operator's `killSessions`. Loads still return the last committed revision; saves and journal writes to the same session or journal fail closed with `SessionStoreError` or `JournalError` until then |
+| Clients | One `MongoClient` (connection pool) per connection string per process, closed at exit; applications may pass their own `client=` instead |
 
 ## 6. Acceptance scenarios
 

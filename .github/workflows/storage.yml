@@ -48,7 +48,9 @@ jobs:
       - name: Check both services
         run: uv run python -m tools.check_storage_services
       - name: Run the storage tests against the databases
-        run: uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres
+        run: >-
+          uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres
+          tests.test_storage_mongodb
       - name: Run the full suite with the extras installed
         run: uv run python -m unittest -q
       - name: Stop services

@@ -9,7 +9,6 @@ connect() callable; they never appear in errors, traces or command lines.
   python -m stores.postgres journal resolve --dsn-env NAME --journal-id ID ACTION_ID --outcome O --confirm
 """
 
-import argparse
 import hashlib
 import json
 import os
@@ -18,9 +17,10 @@ from contextlib import contextmanager
 from uuid import uuid4
 
 from harness.journal import (JournalError, JournalRecoveryRequired, check_inspect_limit, check_outcome,
-                             check_resolution, inspection_record, run_recovery_command)
+                             check_resolution, inspection_record)
 from harness.session import (SESSION_VERSION, SessionConflictError, SessionLoadError, SessionStoreError,
                              validate_session)
+from stores._common import APPLICATION, SCHEMA_VERSION, check_id, storage_main
 
 try:
     import psycopg
@@ -29,9 +29,7 @@ try:
 except ImportError:
     psycopg = None
 
-APPLICATION, SCHEMA_VERSION = "little-harness", 1
 CONNECT_TIMEOUT_SECONDS = 10
-IDENTIFIER = re.compile(r"[A-Za-z0-9._:-]{1,200}")
 SCHEMA_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}")
 TABLES = {"session": ("sessions", "session_messages"),
           "journal": ("journals", "journal_runs", "journal_actions")}
@@ -68,8 +66,7 @@ class _PostgresStorage:
     def __init__(self, name, *, dsn_env, connect, schema, statement_timeout):
         if psycopg is None:
             raise ImportError("PostgreSQL storage needs the optional 'postgres' extra: uv sync --extra postgres")
-        if type(name) is not str or not IDENTIFIER.fullmatch(name):
-            raise ValueError("IDs must be 1-200 characters from A-Z, a-z, 0-9, '.', '_', ':' and '-'")
+        check_id(name)
         if (dsn_env is None) == (connect is None):
             raise TypeError("pass exactly one of dsn_env (a variable name) or connect (a callable)")
         if connect is not None and not callable(connect):
@@ -332,34 +329,10 @@ class PostgresJournal(_PostgresStorage):
 
 
 def main(argv=None):
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--dsn-env", required=True, help="name of the variable holding the DSN, never the DSN")
-    common.add_argument("--schema", default="little_harness")
-    journal_id = argparse.ArgumentParser(add_help=False)
-    journal_id.add_argument("--journal-id", required=True)
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    areas = parser.add_subparsers(dest="area", required=True)
-    areas.add_parser("init", parents=[common], help="create or check the session and journal tables")
-    journal = areas.add_parser("journal", help="inspect or resolve journal records; never runs an action")
-    commands = journal.add_subparsers(dest="command", required=True)
-    inspect = commands.add_parser("inspect", parents=[common, journal_id], help="read-only metadata")
-    inspect.add_argument("--pending", action="store_true")
-    inspect.add_argument("--limit", type=int, default=100)
-    resolve = commands.add_parser("resolve", parents=[common, journal_id], help="record human recovery only")
-    resolve.add_argument("action_id")
-    resolve.add_argument("--outcome", required=True, choices=("completed", "failed", "not_run"))
-    resolve.add_argument("--confirm", action="store_true", required=True)
-    args = parser.parse_args(argv)
-    try:
-        if args.area == "init":
-            for storage in (PostgresSessionStore, PostgresJournal):
-                storage("init", dsn_env=args.dsn_env, schema=args.schema).ensure_schema()
-            print(f"PostgreSQL schema {args.schema} is ready for sessions and journals.")
-        else:
-            run_recovery_command(PostgresJournal(args.journal_id, dsn_env=args.dsn_env, schema=args.schema), args)
-    except (JournalError, SessionStoreError, ValueError, TypeError, ImportError):
-        parser.exit(1, "PostgreSQL storage operation failed; check the variable name, schema, journal ID "
-                       "and recovery options.\n")
+    storage_main(argv, description=__doc__, backend="PostgreSQL", env_option="--dsn-env",
+                 location_option="--schema", default_location="little_harness",
+                 session_store=lambda name, env, schema: PostgresSessionStore(name, dsn_env=env, schema=schema),
+                 journal=lambda name, env, schema: PostgresJournal(name, dsn_env=env, schema=schema))
 
 
 if __name__ == "__main__":

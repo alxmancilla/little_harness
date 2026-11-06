@@ -3,7 +3,7 @@
 Companion: [storage specification](STORAGE_SPEC.md). Each phase is a bounded
 checkpoint with its own gate; no phase changes default behavior or file formats.
 
-**Current state: Phases 0–2 complete; Phase 3 next.** Python 3.11+ is in place.
+**Current state: Phases 0–3 complete; Phase 4 next.** Python 3.11+ is in place.
 
 Every gate includes: `python3 -m unittest -q` offline on Python 3.11 and 3.14 with no
 third-party packages installed, CI green on 3.11–3.14, docs updated with the code,
@@ -128,6 +128,31 @@ offline suite is unchanged.
 4. Docs: replica set requirement, setup, role, TLS.
 
 Gate: SAC-01 to SAC-08 and SAC-13 pass against MongoDB 9.0 in `storage.yml`.
+
+### Phase 3 checkpoint — complete locally; CI gate runs on push
+
+- `stores/mongodb.py` (`MongoSessionStore`, `MongoJournal`) follows spec 5.2:
+  validated `lh_` collections with an ownership record, messages as JSON strings,
+  majority-acknowledged journaled writes, snapshot transactions, and only the
+  driver's labelled retries within `pymongo.timeout`. The `$inc` on the journal
+  document serializes `begin` and `resolve`.
+- The ID rules and the `init` / `journal inspect|resolve` command line moved into
+  `stores/_common.py`, shared with `stores/postgres.py`.
+- Checked first against MongoDB 9.0.4: a write conflict carries the transient label
+  and `with_transaction` stops retrying at the time bound; two read-only transactions
+  never conflict, which is why the counter write is needed.
+- **Finding, now in spec 5.2:** unlike PostgreSQL, a process that dies mid-transaction
+  leaves the transaction open on the server for `transactionLifetimeLimitSeconds`
+  (60 by default). The test asserts the safe behavior: the last saved state loads,
+  saves fail closed until `killAllSessions`, then succeed.
+- `tests/test_storage_mongodb.py` mirrors the PostgreSQL tests (conformance suites,
+  SAC-03, SAC-06, SAC-07, SAC-08, SAC-13, CLI, missing driver), plus validators
+  rejecting malformed documents. Removing the counter write makes SAC-07 fail.
+  Model keys such as `$where` and `a.b` round-trip through the shared suite.
+- One `MongoClient` per connection string per process, closed at exit; no
+  unclosed-client warnings.
+- Locally: 514 tests pass without extras (49 skipped) and with PostgreSQL 18.6 and
+  MongoDB 9.0.4 (5 skipped).
 
 ## Phase 4 — memory in the core
 

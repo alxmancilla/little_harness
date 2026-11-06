@@ -177,6 +177,43 @@ python -m stores.postgres journal resolve --dsn-env APP_POSTGRES_DSN --journal-i
 For local development, `compose.yaml` starts PostgreSQL 18 on `127.0.0.1:55432`
 without a password or TLS; see [Tests](#tests) for running the database suites.
 
+### MongoDB sessions and journals (optional)
+
+`stores.mongodb` provides `MongoSessionStore` and `MongoJournal` for MongoDB 9.0,
+with the same guarantees, options and commands as the PostgreSQL adapters. The
+server must be a replica set (one member is enough), because saves and journal checks
+use transactions.
+
+````sh
+uv sync --extra mongodb
+export APP_MONGODB_URI='mongodb://app@db.example/?replicaSet=rs0&tls=true'
+python -m stores.mongodb init --uri-env APP_MONGODB_URI
+````
+
+````python
+from stores.mongodb import MongoJournal, MongoSessionStore
+
+agent = Agent(model, system, tools=tools, session_store=MongoSessionStore("user-7", uri_env="APP_MONGODB_URI"),
+              journal=MongoJournal("support-worker", uri_env="APP_MONGODB_URI"))
+````
+
+- **Storage.** Collections prefixed `lh_` in the `little_harness` database
+  (`--database` to change it), each with a schema validator. Every message is its own
+  document holding JSON text, so keys chosen by the model never become field names.
+- **Least privilege.** After `init`, the application's user needs only `readWrite` on
+  that database.
+- **Connections.** Use TLS. Connecting is limited to 10 seconds and each operation to
+  5 (`timeout=`); writes are acknowledged by a majority and journaled. One client is
+  shared per connection string; pass `client=` to use your own `MongoClient`.
+- **After a crash mid-save.** The dead process's transaction stays open on the server
+  for up to `transactionLifetimeLimitSeconds` (60 by default). Until then, the session
+  still loads its last saved state, but saves to it fail with `SessionStoreError`; the
+  same applies to journal writes. Wait, or end the session with `killSessions`.
+- **Recovery:** `python -m stores.mongodb journal inspect|resolve --uri-env NAME
+  --journal-id ID`, with the same output and confirmation as the other journals.
+
+`compose.yaml` also starts a single-node MongoDB 9.0 replica set on `127.0.0.1:57017`.
+
 ## Teaching tools and retrieval
 
 The teaching application provides the following tools; the core runtime has none
@@ -301,15 +338,16 @@ make live-model calls. Shared fixtures live in [tests/helpers.py](../tests/helpe
 importing them does not initialize applications.
 
 Storage backends share the contract suites in
-[tests/storage_conformance.py](../tests/storage_conformance.py). The PostgreSQL tests
-skip unless the extra is installed and a test database is named; each test creates
-and drops its own schema:
+[tests/storage_conformance.py](../tests/storage_conformance.py). The PostgreSQL and
+MongoDB tests skip unless the extra is installed and a test database is named; each
+test creates and drops its own schema or database:
 
 ````sh
-docker compose up -d --wait postgres
-uv sync --extra postgres
-LITTLE_HARNESS_TEST_POSTGRES_DSN=postgresql://postgres@127.0.0.1:55432/postgres \
-  uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres
+docker compose up -d --wait
+uv sync --extra postgres --extra mongodb
+export LITTLE_HARNESS_TEST_POSTGRES_DSN=postgresql://postgres@127.0.0.1:55432/postgres
+export LITTLE_HARNESS_TEST_MONGODB_URI='mongodb://127.0.0.1:57017/?directConnection=true'
+uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres tests.test_storage_mongodb
 ````
 
 The [storage workflow](../.github/workflows/storage.yml) runs them in CI.
