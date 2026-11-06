@@ -3,7 +3,7 @@
 Companion: [storage specification](STORAGE_SPEC.md). Each phase is a bounded
 checkpoint with its own gate; no phase changes default behavior or file formats.
 
-**Current state: Phase 0 complete; Phase 1 next.** Python 3.11+ is in place.
+**Current state: Phases 0 and 1 complete; Phase 2 next.** Python 3.11+ is in place.
 
 Every gate includes: `python3 -m unittest -q` offline on Python 3.11 and 3.14 with no
 third-party packages installed, CI green on 3.11–3.14, docs updated with the code,
@@ -54,6 +54,26 @@ checks them successfully.
 Gate: every existing test passes unchanged; conformance suites pass on the
 standard-library backends; SAC-01, SAC-02, SAC-05 pass; `harness/` grows by no more
 than about 80 lines.
+
+### Phase 1 checkpoint — complete
+
+- `SessionStore` and `ActionJournal` are `typing.Protocol` interfaces checked with
+  `isinstance` when an `Agent` is created; combining a store with its path argument,
+  or passing another object, raises `TypeError`.
+- `SessionFile.load()` now returns `None` when no file exists; `validate_session`
+  holds the checks every backend shares. `SessionStoreError` subclasses `OSError`.
+- The journal and session path checks still apply to `ExecutionJournal` and
+  `SessionFile`; other implementations have no file paths to check.
+- New public exports: `SessionStore`, `SessionFile`, `validate_session`,
+  `SessionStoreError`, `SessionConflictError`, `ActionJournal`.
+- `tests/storage_conformance.py` holds 7 session and 7 journal contract tests.
+  `tests/test_storage_conformance.py` runs them against `SessionFile`, a
+  revision-checked in-memory store (which exercises the second-writer test that
+  `SessionFile` skips) and `ExecutionJournal`, plus option checks and SAC-01 (importing
+  `harness` loads no driver). Deliberately broken stores (no conflict check; `\u0000`
+  dropped) fail the suites.
+- `python3 -m unittest -q`: 466 tests pass on Python 3.11 and 3.14 (3 skipped).
+  `harness/` is 2,118 lines, up 61.
 
 ## Phase 2 — PostgreSQL 18 sessions and journal
 

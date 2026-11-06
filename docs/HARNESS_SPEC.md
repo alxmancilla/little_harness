@@ -69,6 +69,8 @@ is an execution boundary for timeouts, **not** a security boundary.
 | `trace_context={...}` | Optional JSON trace annotations, copied at construction; reserved `ts`, `kind`, `run_id` keys rejected |
 | `trace_include_content=False` | Metadata-only JSONL by default; `True` includes tasks/model/tool/summary/error content independently of events |
 | `ExecutionJournal.inspect()` / `resolve(...)` | Offline inspection and explicitly confirmed human outcome recording |
+| `session_store=` (a `SessionStore`) | Optional replacement for `session_path`, never combined with it: `load()` returns `(messages, compaction)` or `None`; `save(messages, compaction, *, durable)` is all-or-nothing. `SessionFile(path)` is the file implementation |
+| `journal=` (an `ActionJournal`) | Optional replacement for `journal_path`, never combined with it: the `ExecutionJournal` methods `prepare`, `assert_ready`, `begin`, `finish`, `close_run`, `inspect`, `resolve`, with its errors and guarantees (FR-08) |
 
 `harness.Agent` requires an explicit keyword-only `tools` mapping; `None` is invalid.
 `ToolRegistry.tool(...)` registers into that application-owned mapping. An explicit
@@ -102,8 +104,13 @@ Supported embedding surface (validated by teaching, HotpotQA and inventory clien
 - The runtime never terminates the host process. Configuration and session problems
   raise `ModelConfigError` or `SessionLoadError`, both subclasses of `ValueError`;
   command-line applications catch them and choose the exit message and code.
-- Recovery exports are `ExecutionJournal`, `JournalError` and
+- Recovery exports are `ActionJournal`, `ExecutionJournal`, `JournalError` and
   `JournalRecoveryRequired`; `validate_tool_input` is also public.
+- Session exports are `SessionStore`, `SessionFile`, `validate_session`,
+  `SessionStoreError` (an `OSError`, so existing file-error handlers still catch it)
+  and its subclass `SessionConflictError`. Stores must check stored data with
+  `validate_session`, and their `str()` must not reveal connection details, because
+  it appears in the resume message.
 - Private methods and internal worker descriptors are implementation details,
   not application extension points. The runtime has no built-in prompts, tools,
   workspace setup, dataset loading or evaluation stages.
@@ -236,8 +243,9 @@ may propose another call; this is distinct from automatic execution retry.
 
 ### FR-08 — Journal actions durably when enabled
 
-With `journal_path`, the parent MUST commit `started` before invocation and commit an
-outcome afterward, using SQLite full synchronous commits. No start commit means no
+With `journal_path` (SQLite) or a `journal=` implementation, the parent MUST commit
+`started` before invocation and commit an outcome afterward, durably (SQLite uses full
+synchronous commits). No start commit means no
 dispatch. Denied, invalid and truncated requests MUST create no action record.
 Records MUST omit arguments, outputs and exception details.
 
@@ -257,6 +265,13 @@ rewritten in version 2 on the next save. Invalid JSON, an unknown version, a
 non-list `messages` or invalid compaction state MUST raise `SessionLoadError` from
 `Agent(...)` and leave the file unchanged. Session history alone MUST NOT be treated
 as proof of action completion.
+
+A `session_store=` implementation MUST give the same guarantees: all-or-nothing
+saves, durable saves when a journal is enabled, and `SessionLoadError` (via
+`validate_session`) for invalid stored data. History can change before the latest
+message (steering), so stores MUST NOT assume it is append-only. Stores that detect a
+second writer raise `SessionConflictError`; `SessionFile` assumes a single writer.
+Save failures propagate out of `run_result`, as file errors do.
 
 ### FR-10 — Compact context without splitting tool exchanges
 
@@ -395,6 +410,7 @@ Paths below are relative to `tests/`; scenarios summarize existing regression co
 | AC-09 / FR-11 | Observer raises or attempts payload mutation | Ordinary failure disables observation; immutable payloads protect state | `test_harness_events.py` |
 | AC-10 / FR-12 | Model endpoint redirects or emits diagnostic errors | Redirect blocked; diagnostic content absent from ordinary results/traces | `test_model_clients.py`, `test_mini_harness.py` |
 | AC-13 / FR-12 | The same text, tool-call, stream-failure and HTTP-failure scenarios reach each adapter | Identical normalized responses; identical error categories; no retry after streaming began | `test_mini_harness.py` (`ProviderConformanceTests`) |
+| AC-14 / FR-08,09 | The same session and journal scenarios reach each storage backend | Exact round trips, rewrites before the latest message, invalid data rejected, recovery required after an unfinished action, second writer refused where supported | `test_storage_conformance.py` (`storage_conformance.py` suites) |
 | AC-11 / FR-13 | Malicious text is retrieved from an approved document | Evidence remains data, with corpus/output limits and source metadata | `test_mini_harness.py` |
 | AC-12 / FR-14 | Offline paired evaluation or mismatched reference | Null quality; shared role budgets; mismatch rejected before inference | `test_evaluate_hotpotqa.py`, `test_hotpotqa_multi_agent.py` |
 

@@ -7,6 +7,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
 
@@ -32,6 +33,25 @@ class JournalRecoveryRequired(JournalError):
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
+
+
+@runtime_checkable
+class ActionJournal(Protocol):
+    """Durable action records; every failure is JournalError or JournalRecoveryRequired."""
+
+    def prepare(self) -> None: ...
+
+    def assert_ready(self) -> None: ...
+
+    def begin(self, run_id: str, tool_call_id: str, tool_name: str, risky: bool) -> str: ...
+
+    def finish(self, action_id: str, status: str, outcome_unknown: bool = False) -> None: ...
+
+    def close_run(self, run_id: str) -> None: ...
+
+    def inspect(self, *, pending_only: bool = False, limit: int = 100) -> list[dict]: ...
+
+    def resolve(self, action_id: str, outcome: str, *, confirm: bool = False) -> None: ...
 
 
 class ExecutionJournal:

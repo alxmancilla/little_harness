@@ -9,14 +9,14 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from .journal import ExecutionJournal, JournalError
+from .journal import ActionJournal, ExecutionJournal, JournalError
 from .events import RunEvent
 from .runtime import BudgetExceeded, ExecutionBudget, RunLimits, RunResult
 from .model_clients import ModelError
 from .tool_execution import (ToolExecutionStopped, ToolOutcome, run_isolated_tool, validate_tool_timeout,
                              validate_worker_env)
 from .policy import PolicyDecision, ToolPolicy
-from .session import SessionFile
+from .session import SessionFile, SessionStore
 
 from .tools import validate_tool_input
 
@@ -131,20 +131,23 @@ class Agent:
     text is added to that user turn before the next model call. It cannot authorize tools.
     worker_env, when set, is the complete environment of timed-tool workers instead of a
     copy of os.environ. Inline tools still see the parent environment. It is not a sandbox.
+    session_store and journal accept any SessionStore or ActionJournal, in place of
+    session_path and journal_path respectively.
     """
 
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
                  compact_at=40000, session_path=None, *, tools, limits=None, tool_timeout_seconds=None,
                  journal_path=None, on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
-                 trace_include_content=False, compact_at_tokens=None, get_steering=None, worker_env=None):
+                 trace_include_content=False, compact_at_tokens=None, get_steering=None, worker_env=None,
+                 session_store=None, journal=None):
         self.model, self.system, self.max_steps = model, system, max_steps
         self._configure_observability(trace_path, trace_context, trace_include_content,
                                       on_event, event_include_content, quiet)
         self._configure_tools(tools, tool_policy, tool_admission, approve,
                               max_tool_output, tool_timeout_seconds, writable_roots, worker_env)
-        self._configure_context(compact_at, compact_at_tokens, session_path)
-        self._configure_controls(limits, get_steering, journal_path)
+        self._configure_context(compact_at, compact_at_tokens, session_path, session_store)
+        self._configure_controls(limits, get_steering, journal_path, journal)
         # Per-run state, reset by run_result().
         self._budget = None
         self._event_run_id, self._event_step, self._event_sequence = None, None, 0
@@ -193,32 +196,37 @@ class Agent:
         self.worker_env = validate_worker_env(worker_env)
         self.writable_roots = tuple(Path(root).resolve() for root in writable_roots)
 
-    def _configure_context(self, compact_at, compact_at_tokens, session_path):
+    def _configure_context(self, compact_at, compact_at_tokens, session_path, session_store):
         """Conversation persistence and compaction thresholds."""
         if compact_at_tokens is not None and (type(compact_at_tokens) is not int or compact_at_tokens <= 0):
             raise ValueError("compact_at_tokens must be a positive integer or None")
+        if session_store is not None and (session_path or not isinstance(session_store, SessionStore)):
+            raise TypeError("session_store must be a SessionStore, and not combined with session_path")
         self.compact_at, self.compact_at_tokens = compact_at, compact_at_tokens
         self._size_after_compact = 0
         # (reported input_tokens, message characters sent) from the latest main model call.
         self._context_usage = None
         self.session_path = Path(session_path) if session_path else None
-        self._session = SessionFile(self.session_path) if self.session_path is not None else None
+        self._session = SessionFile(self.session_path) if self.session_path is not None else session_store
         # The model sees the summary, then history from _context_start; history itself is never shortened.
         self._context_start, self._context_summary = 0, None
 
-    def _configure_controls(self, limits, get_steering, journal_path):
+    def _configure_controls(self, limits, get_steering, journal_path, journal):
         """Per-task budgets, optional steering and the crash-recovery journal, opened last."""
         if limits is not None and not isinstance(limits, RunLimits):
             raise TypeError("limits must be RunLimits or None")
         if get_steering is not None and not callable(get_steering):
             raise TypeError("get_steering must be callable or None")
+        if journal is not None and (journal_path is not None or not isinstance(journal, ActionJournal)):
+            raise TypeError("journal must be an ActionJournal, and not combined with journal_path")
         self.get_steering = get_steering
         self.limits = limits if limits is not None else RunLimits()
-        self.journal = ExecutionJournal(journal_path) if journal_path is not None else None
-        if self.journal is None:
+        self.journal = ExecutionJournal(journal_path) if journal_path is not None else journal
+        # Path separation applies only to the SQLite file journal.
+        if not isinstance(self.journal, ExecutionJournal):
             return
         reserved = {self.trace_path.resolve()}
-        if self._session is not None:
+        if isinstance(self._session, SessionFile):
             reserved.update((self._session.path.resolve(), self._session.tmp_path.resolve()))
         journal_files = {Path(str(self.journal.path) + suffix)
                          for suffix in ("", "-journal", "-wal", "-shm")}
@@ -281,13 +289,14 @@ class Agent:
         return response
 
     def _load(self):
-        """Restore history and the compaction point from the session file, if one exists."""
-        if self._session is None or not self._session.path.exists():
+        """Restore history and the compaction point from the session store, if a session exists."""
+        loaded = self._session.load() if self._session is not None else None
+        if loaded is None:
             return []
-        messages, compaction = self._session.load()
+        messages, compaction = loaded
         if compaction is not None:
             self._context_start, self._context_summary = compaction["start"], compaction["summary"]
-        self._print(f"Resumed {len(messages)} messages from {self.session_path}")
+        self._print(f"Resumed {len(messages)} messages from {self._session}")
         return messages
 
     def _save(self):

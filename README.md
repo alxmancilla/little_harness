@@ -199,8 +199,8 @@ checks from unscored human review. Paid model calls require explicit `--live`.
 Optional controls are passed explicitly to `Agent`: per-task budgets (`limits=`),
 tool policies (`tool_policy=`), human approval (`approve=`), event callbacks (`on_event=`),
 tool timeouts (`tool_timeout_seconds=`), the timed-tool worker environment (`worker_env=`),
-crash-recovery journaling (`journal_path=`),
-session persistence (`session_path=`) and between-step steering (`get_steering=`).
+crash-recovery journaling (`journal_path=` or `journal=`),
+session persistence (`session_path=` or `session_store=`) and between-step steering (`get_steering=`).
 See the [execution controls reference](docs/REFERENCE.md#execution-controls),
 including [isolated tool timeouts](docs/REFERENCE.md#isolated-tool-timeouts) and
 [recovery without replaying](docs/REFERENCE.md#recover-without-replaying).

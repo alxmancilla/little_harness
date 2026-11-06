@@ -1,8 +1,9 @@
 # Little Harness storage specification
 
-**Status:** proposed, revision 1. Nothing here is implemented yet; the
-[harness specification](HARNESS_SPEC.md) remains the as-built contract until each
-phase of the [storage plan](STORAGE_PLAN.md) lands. **Targets:** Python 3.11+,
+**Status:** proposed, revision 1. Phase 1 is implemented: the `SessionStore` and
+`ActionJournal` interfaces (3.1, 3.2) and their standard-library implementations,
+now also described in the [harness specification](HARNESS_SPEC.md). The rest is
+not implemented yet; see the [storage plan](STORAGE_PLAN.md). **Targets:** Python 3.11+,
 PostgreSQL 18, MongoDB 9.0 (replica set), psycopg 3.3, PyMongo 4.19.
 
 **MUST** denotes a required behavior once implemented; **MAY** an optional one.
@@ -127,6 +128,7 @@ naming the missing optional dependency. Existing defaults, file formats and the
   matches the one they last loaded or saved. A mismatch MUST raise
   `SessionConflictError` (a `SessionStoreError`) and leave stored data unchanged.
 - Other save failures MUST raise `SessionStoreError` without connection details.
+  It subclasses `OSError`, so handlers written for file errors also catch it.
   Like a file save error today, it propagates out of `run_result`; no further model
   or tool calls happen in that task.
 - `durable=True` (used when a journal is enabled) MUST mean the save survives a

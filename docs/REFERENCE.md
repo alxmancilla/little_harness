@@ -74,8 +74,8 @@ budget, timeout, policy or journal settings.
 | Trace privacy | `trace_include_content=False` | JSONL metadata only by default; content opt-in is independent of event settings |
 | Tool timeouts | `tool_timeout_seconds=` or tool decorator | Worker processes do not provide security isolation |
 | Worker environment | `worker_env={...}` | Replaces the environment of timed-tool workers only; inline tools still see the parent's |
-| Crash recovery | `journal_path=` | Human-reviewed outcomes, not automatic replay or exactly-once effects |
-| Conversation persistence | `session_path=` | Saved history alone cannot establish whether an action completed |
+| Crash recovery | `journal_path=`, or `journal=` with any `ActionJournal` | Human-reviewed outcomes, not automatic replay or exactly-once effects |
+| Conversation persistence | `session_path=`, or `session_store=` with any `SessionStore` | Saved history alone cannot establish whether an action completed |
 | Between-step steering | `get_steering=callable` | Called only after a saved tool batch; text guides the model but cannot authorize tools or cancel a running one |
 
 For example, `RunLimits(max_model_calls=12, max_tool_calls=12, max_seconds=60)`
