@@ -560,7 +560,8 @@ class Agent:
     def _execute_isolated(self, entry, args, timeout):
         """One worker seam; worker_env=None inherits the parent environment."""
         return run_isolated_tool(entry["fn"], args, timeout, self.max_tool_output,
-                                 risky=entry["risky"], env=self.worker_env)
+                                 risky=entry["risky"], env=self.worker_env,
+                                 memory_context=_tool_context.get())
 
     def _invoke_tool(self, entry, args, timeout):
         """Invoke once; return (ToolOutcome, stop_reason). With journaling, a risky inline failure is uncertain."""

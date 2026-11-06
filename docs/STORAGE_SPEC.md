@@ -1,7 +1,7 @@
 # Little Harness storage specification
 
 **Status:** interfaces, PostgreSQL and MongoDB session, journal and memory adapters,
-and memory tools are implemented; timed memory workers remain planned. See also the
+and inline and timed memory tools are implemented. See also the
 [harness specification](HARNESS_SPEC.md). **Targets:** Python 3.11+,
 PostgreSQL 18, MongoDB 9.0 (replica set), psycopg 3.3, PyMongo 4.19.
 
@@ -108,6 +108,11 @@ whose entries the application merges into its own tools mapping:
 The namespace is bound by the application and is not a tool argument.
 `allow_write=False` registers only `recall`.
 
+For disposable workers, `stores.memory.memory_worker_tools(backend, store_id, namespace,
+env=...)` binds a JSON-serializable database configuration containing only the name
+of the connection variable. Backend and namespace are selected by the application,
+not the model. The private worker protocol carries the current run ID and output limit.
+
 ## 4. Requirements
 
 ### ST-01 — Keep the core standard-library only
@@ -173,9 +178,10 @@ Each journal MUST meet FR-08 exactly:
 - `remember` records `created_by="model"` and the current run ID. Applications
   writing directly through the store record `created_by="application"`.
 - Memory text MUST NOT enter traces or events unless content is explicitly enabled.
-- Memory tools run inline by default. Timed execution using a JSON-bound configuration
-  and worker reconnection is planned for Phase 5; the current closure bindings cannot
-  run in isolated workers. With `worker_env`, workers must receive the required variable.
+- Inline store bindings cannot run in isolated workers. Database worker bindings reconnect
+  in the child and work inline or with timeouts. If `worker_env` is supplied, it must
+  contain the named connection variable. A timed-out write may have committed and
+  MUST be treated as outcome unknown, without automatic retry.
 
 ### ST-06 — Own schemas explicitly
 

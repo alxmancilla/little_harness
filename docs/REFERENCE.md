@@ -244,13 +244,47 @@ also omits them entirely. Never auto-approve based on model or memory text.
 - `delete` and `purge` delete records. This does not erase copies in backups,
   previously saved sessions, traces, filesystem snapshots
   or storage hardware. Protect those separately.
-- These bindings run inline. Agent-wide tool timeouts require an importable worker
-  function and therefore cannot run these closures; JSON-configured timed memory
-  workers are planned for Phase 5. Default traces and events omit memory content;
-  content opt-ins, session history and model output may contain it.
+- `memory_tools(store, namespace)` binds closures and runs inline only. For isolated
+  timeouts, use `stores.memory.memory_worker_tools` as shown below. Default traces and
+  events omit memory content; content opt-ins, session history and model output may contain it.
 - The support evaluation includes synthetic, unreviewed memory-poisoning cases. Its
   `cases.json` retains the synthetic memory; per-case fixtures are ephemeral. Exposure checks
   only establish that the model received it, not that the answer resisted it.
+
+#### Memory tools with isolated timeouts
+
+Configure the connection variable in the parent environment, then pass its **name**
+to the worker registry and its value only through `worker_env`:
+
+````python
+import os
+from harness import ToolPolicy
+from examples import support_agent
+from stores.memory import memory_worker_tools
+from stores.postgres import PostgresJournal
+registry = memory_worker_tools("postgres", "support", "tenant:42/user:7", env="APP_POSTGRES_DSN")
+agent = support_agent.create_agent(model, documents, products, memory_registry=registry,
+    tool_timeout_seconds=10, worker_env={"APP_POSTGRES_DSN": os.environ["APP_POSTGRES_DSN"]},
+    tool_policy=ToolPolicy(), quiet=False,
+    journal=PostgresJournal("support-worker", dsn_env="APP_POSTGRES_DSN"))
+````
+
+Use `"mongodb"` and the URI variable name for MongoDB; `location=` selects the
+schema or database, and `quota=` and `timeout=` configure the backend. The tool
+timeout applies to the whole child process, including connection and imports; the
+backend timeout applies to its database operations. `memory_allow_write=False` or
+the registry's `allow_write=False` omits writes. Policy and approval still run in the
+parent before the journal and worker. The worker receives the run ID and output limit
+privately, not as model arguments. PostgreSQL backend timeouts must be at least one
+millisecond.
+
+Each timed invocation starts a fresh process and connection; MongoDB cannot reuse
+the parent's client pool across processes. Monitor database connection counts and
+latency before enabling this for high-volume workloads. A timeout or interrupted write
+can have committed: inspect and resolve the journal and external state before retrying.
+An interrupted MongoDB transaction may hold locks until its server-side lifetime expires.
+`worker_env` limits inherited environment variables, not filesystem or network access;
+it is not a security sandbox.
 
 ## Teaching tools and retrieval
 

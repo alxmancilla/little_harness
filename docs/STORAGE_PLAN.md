@@ -178,19 +178,19 @@ The user accepted exceeding the original approximately 2,200-line runtime target
   implemented. PostgreSQL and MongoDB provide the durable memory stores; quota checks
   and writes share a serialized transaction. Namespaces do not provide access control,
   and deletion does not remove copies from sessions, backups or snapshots.
-- The current inline tools cannot be used with agent-wide isolated tool timeouts;
-  JSON-bound workers remain Phase 5 work. The support evaluation verifies that each
+- The original inline store bindings cannot be used with isolated tool timeouts;
+  database worker bindings are provided in Phase 5. The support evaluation verifies that each
   poisoned memory was actually exposed, but answer safety still needs human review.
 - The user accepted a larger runtime than the approximately 2,200-line target.
-  SQLite journal and memory implementations were subsequently removed. CI requires a push.
+  SQLite journal and memory implementations were subsequently removed. The Phase 4 CI passed.
 
 ## Phase 5 — PostgreSQL 18 and MongoDB 9.0 memory
 
 1. `PostgresMemoryStore` (GIN-indexed word array) and `MongoMemoryStore` (compound
    multikey index with store and namespace prefix) are implemented.
 2. Memory conformance suite against both; namespace isolation, quota and purge tests.
-3. Timed memory tools via a JSON-bound configuration, with `worker_env` passing only
-   the connection variable.
+3. `stores.memory.memory_worker_tools` binds non-secret JSON configuration for timed
+   memory tools; the worker reconnects using the named variable in `worker_env`.
 
 Gate: SAC-09 to SAC-13 pass on both databases in `storage.yml`.
 

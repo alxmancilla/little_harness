@@ -92,7 +92,7 @@ def _stop_worker(process):
         pass
 
 
-def run_isolated_tool(fn, args, timeout_seconds, max_output, *, risky=False, env=None):
+def run_isolated_tool(fn, args, timeout_seconds, max_output, *, risky=False, env=None, memory_context=None):
     """Return a bounded result, never retry. Tool arguments travel over stdin, not argv."""
     validate_tool_timeout(timeout_seconds)
     if timeout_seconds is None:
@@ -101,7 +101,7 @@ def run_isolated_tool(fn, args, timeout_seconds, max_output, *, risky=False, env
     started = time.monotonic()
     try:
         payload = {**_descriptor(fn), "args": args, "max_output": max_output,
-                   "risky": risky, "sys_path": [str(path) for path in sys.path]}
+                   "risky": risky, "sys_path": [str(path) for path in sys.path], "memory_context": memory_context}
         data = json.dumps(payload, allow_nan=False).encode("utf-8")
     except (ValueError, TypeError):
         return ToolOutcome("failed", "timed tool requires an importable module-level function and JSON arguments", True)
@@ -159,6 +159,9 @@ def _worker():
     sys.path[:] = payload["sys_path"]
     started = False
     try:
+        if payload.get("memory_context") is not None:
+            from harness.memory import _tool_context
+            _tool_context.set(tuple(payload["memory_context"]))
         if payload["main_path"]:
             spec = importlib.util.spec_from_file_location("_harness_tool_main", payload["main_path"])
             module = importlib.util.module_from_spec(spec)

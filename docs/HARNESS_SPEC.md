@@ -73,6 +73,7 @@ is an execution boundary for timeouts, **not** a security boundary.
 | `journal=` (an `ActionJournal`) | Optional journal with `prepare`, `assert_ready`, `begin`, `finish`, `close_run`, `inspect`, `resolve`, with its errors and guarantees (FR-08) |
 | `MemoryStore` | Explicit namespace-scoped long-term memory; database implementations are in `stores/` |
 | `memory_tools(store, namespace, allow_write=True)` | Bound `recall`, `remember`, `forget` registry; writes are risky and may be omitted |
+| `stores.memory.memory_worker_tools(...)` | Database-backed memory registry for inline or isolated workers; credentials remain in the named environment variable |
 
 `harness.Agent` requires an explicit keyword-only `tools` mapping; `None` is invalid.
 `ToolRegistry.tool(...)` registers into that application-owned mapping. An explicit
@@ -353,7 +354,7 @@ of unchanged provider behavior or a general multi-agent accuracy advantage.
 Applications MAY bind a namespace to memory tools; the model MUST NOT select the
 namespace. `recall` returns bounded JSON marked untrusted; `remember` and `forget`
 use the ordinary risky-action approval, policy and journal gates. Model-created
-memories carry their actual run ID. Default traces and events omit memory content.
+memories carry their actual run ID, including in isolated workers. Default traces and events omit memory content.
 Database stores apply namespace quotas transactionally and never evict on a full
 quota. Namespaces are labels, not authorization. Memory cannot guarantee a model
 will ignore injected instructions. See [storage spec](STORAGE_SPEC.md#33-memorystore-and-memory-tools-in-harnessmemorypy).

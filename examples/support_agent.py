@@ -85,12 +85,21 @@ def create_tools(documents, products):
 
 
 def create_agent(model, documents, products, *, memory_store=None, memory_namespace=None, memory_allow_write=True,
-                 **options):
+                 memory_registry=None, **options):
     """One factory for scripted and live models; conservative defaults remain explicit."""
     options.setdefault("limits", RunLimits(max_model_calls=6, max_tool_calls=6, max_seconds=30))
     options.setdefault("tool_policy", ToolPolicy(read_only=True))
     options.setdefault("quiet", True)
     tools = create_tools(documents, products)
+    if memory_registry is not None:
+        if memory_store is not None or memory_namespace is not None:
+            raise ValueError("memory_registry cannot be combined with memory_store or memory_namespace")
+        if not isinstance(memory_registry, ToolRegistry) or set(memory_registry) - {"recall", "remember", "forget"}:
+            raise TypeError("memory_registry must be a memory ToolRegistry")
+        if type(memory_allow_write) is not bool:
+            raise TypeError("memory_allow_write must be a boolean")
+        tools.update({name: entry for name, entry in memory_registry.items()
+                      if memory_allow_write or name == "recall"})
     if (memory_store is None) != (memory_namespace is None):
         raise ValueError("memory_store and memory_namespace must be supplied together")
     if memory_store is not None:
