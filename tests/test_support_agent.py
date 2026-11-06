@@ -108,6 +108,32 @@ class SupportAgentTests(TemporaryDirectoryTestCase):
         with self.assertRaisesRegex(ValueError, "complete"):
             app.parse_recommendation(result, agent.messages, "WIDGET")
 
+    def test_one_repair_turn_returns_the_validation_error_and_keeps_this_tasks_evidence(self):
+        good = {"sku": "WIDGET", "recommendation": "Check power before pairing.",
+                "sources": ["connectivity.md"], "needs_human": False}
+        lookup = tool_calls(("notes", "search_support", {"query": "reconnect"}),
+                            ("product", "lookup_product", {"sku": "WIDGET"}))
+        bad = reply(json.dumps({**good, "sources": ["unretrieved.md"]}))
+        task = json.dumps({"sku": "WIDGET", "question": "reconnect"})
+        agent = self.agent(Model(lookup, bad, reply(json.dumps(good))))
+        result, value = app.run_validated(agent, task, "WIDGET")
+        self.assertEqual((result.status, value), ("completed", good))
+        repairs = [m["content"] for m in agent.messages if m["role"] == "user" and isinstance(m["content"], str)][1:]
+        self.assertEqual(repairs, [app.REPAIR_REQUEST.format(error="recommendation cites evidence not "
+                                                                    "retrieved in this task")])
+        self.assertNotIn("unretrieved.md", repairs[0])
+        with self.assertRaisesRegex(ValueError, "not retrieved"):
+            app.parse_recommendation(result, agent.messages, "WIDGET")
+        agent = self.agent(Model(lookup, bad, bad))
+        with self.assertRaisesRegex(ValueError, "not retrieved"):
+            app.run_validated(agent, task, "WIDGET")
+        self.assertEqual(len(agent.messages), 6)
+        from harness import RunLimits
+        agent = self.agent(Model(), limits=RunLimits(max_model_calls=0))
+        with self.assertRaisesRegex(ValueError, "complete"):
+            app.run_validated(agent, task, "WIDGET")
+        self.assertEqual(len(agent.messages), 1)
+
     def test_draft_saving_requires_approval_and_never_overwrites(self):
         _, _, value = self.run_app()
         path = self.root / "draft.json"
@@ -155,7 +181,8 @@ class SupportAgentTests(TemporaryDirectoryTestCase):
             make.assert_called_once_with()
         with mock.patch.object(sys, "argv", ["support", "--save-draft", str(self.root / "bad.json"),
                                             "--trace", str(self.root / "bad-trace.jsonl")]), \
-                mock.patch.object(app, "OfflineModel", return_value=Model(reply("invalid output"))), \
+                mock.patch.object(app, "OfflineModel",
+                                  return_value=Model(reply("invalid output"), reply("still invalid"))), \
                 mock.patch.object(app, "save_draft") as save, mock.patch("builtins.print"):
             self.assertEqual(app.main(), 1)
             save.assert_not_called()

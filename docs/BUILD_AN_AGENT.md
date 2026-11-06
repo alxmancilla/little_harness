@@ -90,8 +90,21 @@ recommendation = parse_recommendation(result, agent.messages, "WIDGET")
 ````
 
 Here `json` and `parse_recommendation` are imports in the application module.
-Invalid output raises an application error: there is no hidden repair call or
-automatic retry. Provenance checks do **not** verify that prose correctly interprets
+Invalid output raises an application error: the runtime makes no hidden repair call
+or automatic retry.
+
+The application may choose to give the model one visible chance to fix its answer.
+`run_validated` sends the validation error back as a new user turn and validates
+the reply; evidence retrieved earlier in the same task still counts:
+
+````python
+result, recommendation = run_validated(agent, task, "WIDGET", repairs=1)
+````
+
+The error text is written by the application, never copied from model output. Only a
+completed run with an invalid answer is repaired; budget stops, refusals and model
+errors raise immediately. Each repair turn has its own budget, and `result` describes
+only the last turn. Provenance checks do **not** verify that prose correctly interprets
 evidence. Review citations and domain correctness, especially with real models.
 Use a fresh agent per independent request; keep histories and traces separate.
 

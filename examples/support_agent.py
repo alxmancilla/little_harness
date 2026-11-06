@@ -25,6 +25,8 @@ Ground the recommendation in retrieved notes and product data. If a product is
 unknown, evidence is absent, or a request cannot be supported, escalate with
 needs_human=true. A non-escalated recommendation must cite at least one source.
 Do not claim a refund, repair or message has been performed. No markdown fences."""
+REPAIR_REQUEST = ("The application rejected your answer: {error}. Reply with only the corrected "
+                  "JSON object, citing only sources that search_support returned in this task.")
 
 
 def load_documents():
@@ -97,10 +99,12 @@ def _unique_object(pairs):
     return value
 
 
-def parse_recommendation(result, messages, expected_sku):
+def parse_recommendation(result, messages, expected_sku, *, task_start=None):
     """Validate execution, strict output shape and citations from this task's actual results.
 
     This checks provenance, not whether the prose correctly interprets the evidence.
+    task_start, when set, is the index of the task message; evidence from that message
+    on counts, including repair turns.
     """
     if result.status != "completed" or len(result.answer) > 10000:
         raise ValueError("support execution did not produce a complete recommendation")
@@ -118,9 +122,10 @@ def parse_recommendation(result, messages, expected_sku):
     # A new plain user task resets provenance: old conversations are not fresh evidence.
     sources, calls = set(), {}
     product_seen = False
-    for message in messages:
+    for message in messages[task_start or 0:]:
         if message["role"] == "user" and isinstance(message["content"], str):
-            sources, calls, product_seen = set(), {}, False
+            if task_start is None:
+                sources, calls, product_seen = set(), {}, False
             continue
         if not isinstance(message["content"], list):
             continue
@@ -138,6 +143,23 @@ def parse_recommendation(result, messages, expected_sku):
     if not value["needs_human"] and (not value["sources"] or not product_seen):
         raise ValueError("a supported recommendation requires retrieved notes and product data")
     return value
+
+
+def run_validated(agent, task, expected_sku, repairs=1):
+    """Run a task; if only the answer is invalid, send the validation error back up to `repairs` times.
+
+    Each repair is one more visible user turn with its own budget. The error text is
+    written by this application, never copied from model output.
+    """
+    start = len(agent.messages)
+    result = agent.run_result(task)
+    for attempt in range(repairs + 1):
+        try:
+            return result, parse_recommendation(result, agent.messages, expected_sku, task_start=start)
+        except ValueError as error:
+            if attempt == repairs or result.status != "completed":
+                raise
+            result = agent.run_result(REPAIR_REQUEST.format(error=error))
 
 
 class OfflineModel:
@@ -196,8 +218,7 @@ def main():
     try:
         agent = create_agent(make_model() if args.live else OfflineModel(), load_documents(), PRODUCTS,
                              trace_path=args.trace, trace_include_content=args.trace_content)
-        result = agent.run_result(json.dumps({"sku": args.sku, "question": args.question}))
-        value = parse_recommendation(result, agent.messages, args.sku)
+        result, value = run_validated(agent, json.dumps({"sku": args.sku, "question": args.question}), args.sku)
         print(json.dumps({"execution": result.status, "recommendation": value,
                           "usage": result.to_dict()["usage"]}, ensure_ascii=False, indent=2))
         if args.save_draft:
