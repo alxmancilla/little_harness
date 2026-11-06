@@ -6,10 +6,11 @@ from pathlib import Path
 
 from agents.teaching.demos import ScriptedModel
 from harness import Agent, ToolRegistry
+from stores.postgres import PostgresJournal
 
 
 def main():
-    phase, root = sys.argv[1], Path(sys.argv[2])
+    phase, root, schema = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
     tools = ToolRegistry()
 
     @tools.tool(risky=True)
@@ -27,7 +28,7 @@ def main():
     ])
     agent = Agent(model, "offline crash test", tools=tools, approve=lambda *_: True,
                     trace_path=root / "trace.jsonl", session_path=root / "session.json",
-                    journal_path=root / "execution.sqlite3")
+                    journal=PostgresJournal(phase, dsn_env="LITTLE_HARNESS_TEST_POSTGRES_DSN", schema=schema))
     if phase == "before_tool":
         begin = agent.journal.begin
 

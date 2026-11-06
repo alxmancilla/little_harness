@@ -23,7 +23,22 @@ def main():
         return create_agent(model, config, system, **options)
 
     args = sys.argv[1:]
-    journal_path = os.environ.get("HARNESS_JOURNAL", "").strip() or None
+    if os.environ.get("HARNESS_JOURNAL", "").strip():
+        sys.exit("HARNESS_JOURNAL is no longer supported; configure a PostgreSQL or MongoDB journal instead.")
+    backend = os.environ.get("HARNESS_JOURNAL_BACKEND", "").strip()
+    journal_id = os.environ.get("HARNESS_JOURNAL_ID", "").strip()
+    if bool(backend) != bool(journal_id) or backend not in ("", "postgres", "mongodb"):
+        sys.exit("Set HARNESS_JOURNAL_BACKEND to postgres or mongodb and provide HARNESS_JOURNAL_ID.")
+    journal = None
+    try:
+        if backend == "postgres":
+            from stores.postgres import PostgresJournal
+            journal = PostgresJournal(journal_id, dsn_env="HARNESS_POSTGRES_DSN")
+        elif backend == "mongodb":
+            from stores.mongodb import MongoJournal
+            journal = MongoJournal(journal_id, uri_env="HARNESS_MONGODB_URI")
+    except (ImportError, ValueError, TypeError):
+        sys.exit("Invalid journal configuration; install the backend extra and configure its connection variable.")
     read_only = os.environ.get("HARNESS_READ_ONLY", "").strip()
     if read_only not in ("", "0", "1"):
         sys.exit("Invalid HARNESS_READ_ONLY; use 1 to enable read-only tools or 0 to disable it.")
@@ -39,7 +54,7 @@ def main():
         sys.exit("Invalid execution limits; check HARNESS_MAX_MODEL_CALLS, HARNESS_MAX_TOOL_CALLS, "
                  "HARNESS_MAX_TOKENS, HARNESS_MAX_SECONDS and HARNESS_TOOL_TIMEOUT_SECONDS.")
     options = dict(limits=limits, tool_timeout_seconds=tool_timeout,
-                   journal_path=journal_path, tool_policy=policy, trace_include_content=trace_content == "1")
+                   journal=journal, tool_policy=policy, trace_include_content=trace_content == "1")
     if args and args[0] == "rag-mock":
         agent = agent_factory(rag_demo_model, SYSTEM_PROMPT, **options)
         question = " ".join(args[1:]) or "What are the Aurora Observatory visiting hours?"

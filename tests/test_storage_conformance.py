@@ -1,12 +1,11 @@
 """Standard-library storage backends against the shared storage contracts."""
 
 import json
-import sqlite3
 
-from harness import (Agent, ExecutionJournal, SessionConflictError, SessionFile, SessionStoreError,
-                     validate_session)
+from harness import Agent, SessionConflictError, SessionFile, SessionStoreError, validate_session
 from tests.helpers import TemporaryDirectoryTestCase
-from tests.storage_conformance import JournalConformanceTests, SessionStoreConformanceTests
+from tests.storage_conformance import SessionStoreConformanceTests
+from tests.storage_fakes import FakeJournal
 
 
 class FileSessionStoreTests(SessionStoreConformanceTests, TemporaryDirectoryTestCase):
@@ -51,27 +50,15 @@ class RevisionCheckedSessionStoreTests(SessionStoreConformanceTests, TemporaryDi
         self.database[name] = (1, json.dumps(data))
 
 
-class SQLiteJournalTests(JournalConformanceTests, TemporaryDirectoryTestCase):
-    def make_journal(self, name):
-        return ExecutionJournal(self.root / f"{name}.sqlite3")
-
-    def make_foreign(self, name):
-        path = self.root / f"{name}.sqlite3"
-        with sqlite3.connect(path) as connection:
-            connection.execute("CREATE TABLE unrelated (value TEXT)")
-        connection.close()
-        return ExecutionJournal(path)
-
-
 class AgentStorageOptionTests(TemporaryDirectoryTestCase):
     def agent(self, **options):
         return Agent(lambda *_: None, "sys", tools={}, trace_path=self.root / "trace.jsonl", quiet=True, **options)
 
     def test_store_and_path_options_are_exclusive_and_type_checked(self):
-        store, journal = SessionFile(self.root / "s.json"), ExecutionJournal(self.root / "j.sqlite3")
+        store, journal = SessionFile(self.root / "s.json"), FakeJournal()
         for options in ({"session_store": store, "session_path": self.root / "other.json"},
                         {"session_store": object()},
-                        {"journal": journal, "journal_path": self.root / "other.sqlite3"},
+                        {"journal": journal, "journal_path": self.root / "old-journal"},
                         {"journal": object()}):
             with self.subTest(options=sorted(options)), self.assertRaises(TypeError):
                 self.agent(**options)
@@ -79,11 +66,6 @@ class AgentStorageOptionTests(TemporaryDirectoryTestCase):
     def test_session_store_errors_are_os_errors_for_existing_handlers(self):
         self.assertTrue(issubclass(SessionConflictError, SessionStoreError))
         self.assertTrue(issubclass(SessionStoreError, OSError))
-
-    def test_file_journal_still_cannot_share_the_session_file(self):
-        session = self.root / "shared.sqlite3"
-        with self.assertRaises(ValueError):
-            self.agent(session_store=SessionFile(session), journal=ExecutionJournal(session))
 
     def test_importing_harness_loads_no_database_driver(self):
         child = self.child("""

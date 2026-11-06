@@ -9,7 +9,9 @@ from dataclasses import replace
 from unittest import mock
 
 from examples import support_agent as app
-from tests.helpers import Model, REPO, TemporaryDirectoryTestCase, reply, tool_calls
+from harness import ToolPolicy
+from tests.helpers import Model, REPO, RecordingModel, TemporaryDirectoryTestCase, reply, tool_calls
+from tests.storage_fakes import FakeJournal, FakeMemoryStore
 
 
 class SupportAgentTests(TemporaryDirectoryTestCase):
@@ -32,6 +34,23 @@ class SupportAgentTests(TemporaryDirectoryTestCase):
         self.assertTrue(all(tool["read_only"] for tool in agent.tools.values()))
         self.assertNotIn("pairing button", agent.trace_path.read_text())
         self.assertNotIn("reconnect disconnected device", agent.trace_path.read_text())
+
+    def test_optional_support_memory_recall_and_approved_remember(self):
+        store = FakeMemoryStore()
+        store.add("customer:1", "warranty prefers email", kind="preference", created_by="application")
+        model = RecordingModel(tool_calls(("a", "recall", {"query": "warranty"}),
+                                          ("b", "remember", {"text": "prefers email", "kind": "preference"})),
+                               reply("done"))
+        approval = mock.Mock(return_value=True)
+        agent = self.agent(model, memory_store=store, memory_namespace="customer:1", tool_policy=ToolPolicy(),
+                           approve=approval, journal=FakeJournal())
+        self.assertEqual(agent.run_result("review the customer's preferences").status, "completed")
+        recalled = json.loads(model.calls[1][-1]["content"][0]["content"])
+        self.assertTrue(recalled["untrusted"])
+        self.assertEqual(recalled["memories"][0]["text"], "warranty prefers email")
+        approval.assert_called_once()
+        self.assertEqual({record.created_by for record in store.list("customer:1")}, {"model", "application"})
+        self.assertEqual({action["tool_name"] for action in agent.journal.inspect()}, {"recall", "remember"})
 
     def test_unknown_product_or_missing_evidence_escalates_without_inventing_a_source(self):
         for question, sku in (("reconnect", "UNKNOWN"), ("penguin migration", "WIDGET")):

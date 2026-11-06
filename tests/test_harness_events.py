@@ -8,6 +8,7 @@ from harness import RunEvent
 from tests import helpers as f
 from tests import tool_fixtures
 from tests.helpers import used
+from tests.storage_fakes import FakeJournal as fake_journal
 
 from harness import agent as h
 
@@ -188,7 +189,7 @@ class EventTests(f.HarnessTestCase):
                 model = f.RecordingModel(f.tool_calls(("a", "write_file", {"path": "note", "content": "data"})),
                                          f.reply("done"))
                 agent = self.agent(model, on_event=observe, session_path=self.dir / (phase + ".json"),
-                                   journal_path=self.dir / (phase + ".sqlite3"))
+                                   journal=fake_journal())
                 with mock.patch.dict(self.tools["write_file"], {"fn": execute}):
                     result = agent.run_result("go")
                 self.assertEqual(result.status, "completed")
@@ -226,7 +227,7 @@ class EventTests(f.HarnessTestCase):
         execute = mock.Mock(return_value="completed")
         session = self.dir / "session.json"
         agent = self.agent([f.tool_calls(("a", "current_time", {}), ("b", "current_time", {}))],
-                           on_event=observe, session_path=session, journal_path=self.dir / "journal.sqlite3")
+                           on_event=observe, session_path=session, journal=fake_journal())
         with mock.patch.dict(self.tools["current_time"], {"fn": execute}):
             result = agent.run_result("go")
         self.assertEqual(result.status, "interrupted")
@@ -277,8 +278,8 @@ class EventTests(f.HarnessTestCase):
         self.assertEqual(result.usage.tool_errors, 2)
 
     def test_journal_ids_match_events_and_recovery_blocks_before_model_activity(self):
-        journal = self.dir / "journal.sqlite3"
-        agent = self.agent([f.tool_calls(("a", "current_time", {})), f.reply("done")], journal_path=journal)
+        journal = fake_journal()
+        agent = self.agent([f.tool_calls(("a", "current_time", {})), f.reply("done")], journal=journal)
         agent.run("go")
         row = agent.journal.inspect()[0]
         self.assertEqual(self.events[0].run_id, row["run_id"])
@@ -286,14 +287,14 @@ class EventTests(f.HarnessTestCase):
         self.assertEqual(self.select("tool_finished")[0].data["action_id"], row["action_id"])
         agent.journal.begin("unclosed", "other", "current_time", False)
         self.events.clear()
-        result = self.agent([], journal_path=journal).run_result("blocked")
+        result = self.agent([], journal=journal).run_result("blocked")
         self.assertEqual(result.stop_reason, "journal_recovery_required")
         self.assertEqual(self.kinds(), ["run_started", "run_stopped", "run_finished"])
         self.assertEqual(result.usage.model_calls, 0)
 
     def test_journal_outcome_commit_failure_keeps_actual_tool_outcome(self):
         agent = self.agent([f.tool_calls(("a", "current_time", {}), ("b", "current_time", {}))],
-                           journal_path=self.dir / "journal.sqlite3")
+                           journal=fake_journal())
         with mock.patch.object(agent.journal, "finish", side_effect=h.JournalError()):
             result = agent.run_result("go")
         self.assertEqual(result.stop_reason, "journal_error")
@@ -310,11 +311,11 @@ class EventTests(f.HarnessTestCase):
                 self.assertTrue(agent.journal.inspect()[0]["run_closed"])
 
         agent = self.agent([f.tool_calls(("a", "current_time", {})), f.reply("done")],
-                           on_event=observe, session_path=session, journal_path=self.dir / "journal.sqlite3")
+                           on_event=observe, session_path=session, journal=fake_journal())
         self.assertEqual(agent.run_result("go").status, "completed")
         self.assertFalse(agent.event_callback_failed, "observer assertions must not have failed")
         self.events.clear()
-        agent = self.agent([f.reply("done")], journal_path=self.dir / "close-failure.sqlite3")
+        agent = self.agent([f.reply("done")], journal=fake_journal())
         with mock.patch.object(agent.journal, "close_run", side_effect=h.JournalError()):
             result = agent.run_result("go")
         self.assertEqual(result.stop_reason, "journal_error")
@@ -358,7 +359,7 @@ class EventTests(f.HarnessTestCase):
                 execute = mock.Mock(return_value="must not run")
                 model = f.RecordingModel(f.tool_calls(("a", "current_time", {})))
                 agent = self.agent(model, on_event=observe, limits=h.RunLimits(max_seconds=1),
-                                   journal_path=self.dir / (phase + ".sqlite3"))
+                                   journal=fake_journal())
                 with mock.patch("harness.runtime.time.monotonic", side_effect=lambda: now[0]), \
                         mock.patch.dict(self.tools["current_time"], {"fn": execute}):
                     result = agent.run_result("go")

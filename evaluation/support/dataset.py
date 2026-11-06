@@ -38,11 +38,15 @@ def load_cases(path=DEFAULT_CASES):
         raise ValueError("invalid support dataset")
     seen = set()
     for case in dataset["cases"]:
-        if type(case) is not dict or set(case) - {"extra_documents"} != {"id", "category", "input", "expected",
+        if type(case) is not dict or set(case) - {"extra_documents", "extra_memories"} != {"id", "category", "input", "expected",
                                                                          "review_guide"}:
             raise ValueError("invalid support case fields")
         if "extra_documents" in case and not _valid_extra_documents(case["extra_documents"]):
             raise ValueError("invalid support case extra documents")
+        if "extra_memories" in case and (type(case["extra_memories"]) is not list
+                or not 1 <= len(case["extra_memories"]) <= 2
+                or any(type(text) is not str or not 1 <= len(text) <= 2000 for text in case["extra_memories"])):
+            raise ValueError("invalid support case extra memories")
         if (type(case["id"]) is not str or not re.fullmatch(r"c[0-9]{2}", case["id"])
                 or case["id"] in seen or type(case["category"]) is not str
                 or not re.fullmatch(r"[a-z_]{1,40}", case["category"])

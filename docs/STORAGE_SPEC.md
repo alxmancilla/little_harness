@@ -1,10 +1,8 @@
 # Little Harness storage specification
 
-**Status:** proposed, revision 1. Implemented so far: the `SessionStore` and
-`ActionJournal` interfaces (3.1, 3.2) with their standard-library implementations,
-also described in the [harness specification](HARNESS_SPEC.md), and the PostgreSQL
-and MongoDB session stores and journals (5.1 `stores/postgres.py`, 5.2
-`stores/mongodb.py`). Memory is not implemented yet; see the [storage plan](STORAGE_PLAN.md). **Targets:** Python 3.11+,
+**Status:** interfaces, PostgreSQL and MongoDB session, journal and memory adapters,
+and memory tools are implemented; timed memory workers remain planned. See also the
+[harness specification](HARNESS_SPEC.md). **Targets:** Python 3.11+,
 PostgreSQL 18, MongoDB 9.0 (replica set), psycopg 3.3, PyMongo 4.19.
 
 **MUST** denotes a required behavior once implemented; **MAY** an optional one.
@@ -12,20 +10,19 @@ Requirements are numbered `ST-xx`; acceptance scenarios `SAC-xx`.
 
 ## 1. Purpose and scope
 
-Let applications keep three kinds of data outside local files, with the same
-guarantees the file and SQLite defaults give today:
+Applications can keep three kinds of data outside local files:
 
-| Data | Today | Adds |
-| --- | --- | --- |
-| Conversation state | `SessionFile`: history plus compaction point, JSON on disk | `SessionStore` interface; PostgreSQL and MongoDB stores |
-| Action journal | `ExecutionJournal`: SQLite, full synchronous commits | `ActionJournal` interface; PostgreSQL and MongoDB journals |
-| Long-term memory | None | `MemoryStore` interface, memory tools, SQLite reference, PostgreSQL and MongoDB stores |
+| Data | Interfaces and implementations |
+| --- | --- |
+| Conversation state | `SessionStore`; `SessionFile`, PostgreSQL and MongoDB stores |
+| Action journal | `ActionJournal`; PostgreSQL and MongoDB journals |
+| Long-term memory | `MemoryStore`, memory tools, PostgreSQL and MongoDB stores |
 
 ### Goals
 
 - Keep `harness/` standard-library only: interfaces and defaults live there; database
   adapters live in a separate optional package, `stores/`.
-- Keep today's defaults (`session_path=`, `journal_path=`) and file formats unchanged.
+- Retain `session_path=` and its file format; journals and memory use database adapters.
 - Give every backend the same contract, proven by shared conformance tests, as
   `ProviderConformanceTests` does for model adapters.
 - Expose memory to the model only as ordinary, visible, policy-gated tools.
@@ -45,8 +42,8 @@ guarantees the file and SQLite defaults give today:
 
 ## 2. Vocabulary and boundaries
 
-- **Backend:** `file`/`sqlite` (standard library, in `harness/`), `postgres`, `mongodb`
-  (in `stores/`, importing their drivers lazily).
+- **Backend:** `file` for sessions (standard library, in `harness/`); `postgres` and
+  `mongodb` for sessions, journals and memory (in `stores/`, importing drivers lazily).
 - **Session ID / journal ID:** application-chosen strings (1–200 characters,
   `[A-Za-z0-9._:-]`) naming one session or one journal inside a database. They play
   the role the file path plays today.
@@ -78,11 +75,10 @@ class SessionStore(Protocol):
 
 ### 3.2 `ActionJournal` (in `harness/journal.py`)
 
-The existing `ExecutionJournal` methods become the interface: `prepare`,
+The interface has these methods: `prepare`,
 `assert_ready`, `begin`, `finish`, `close_run`, `inspect`, `resolve`.
 
-- `Agent(journal=...)` is new and mutually exclusive with `journal_path=`.
-- `ExecutionJournal(path)` stays the SQLite implementation.
+- `Agent(journal=...)` accepts an `ActionJournal` implementation.
 - `JournalError` and `JournalRecoveryRequired` stay the only errors the agent sees.
 
 ### 3.3 `MemoryStore` and memory tools (in `harness/memory.py`)
@@ -177,9 +173,9 @@ Each journal MUST meet FR-08 exactly:
 - `remember` records `created_by="model"` and the current run ID. Applications
   writing directly through the store record `created_by="application"`.
 - Memory text MUST NOT enter traces or events unless content is explicitly enabled.
-- Memory tools run inline by default. Timed execution is supported by binding a
-  JSON configuration (backend, connection environment variable name, namespace),
-  so the worker reconnects; with `worker_env`, that variable must be passed on.
+- Memory tools run inline by default. Timed execution using a JSON-bound configuration
+  and worker reconnection is planned for Phase 5; the current closure bindings cannot
+  run in isolated workers. With `worker_env`, workers must receive the required variable.
 
 ### ST-06 — Own schemas explicitly
 
@@ -229,12 +225,12 @@ get the same subcommands with the same output and confirmation rules:
 
 | Concern | Design |
 | --- | --- |
-| Layout | One schema (default `little_harness`). Tables `meta`, `sessions`, `session_messages`, `journals`, `journal_runs`, `journal_actions`, `memories` |
+| Layout | One schema (default `little_harness`). Tables `meta`, `sessions`, `session_messages`, `journals`, `journal_runs`, `journal_actions`, `memory_namespaces`, `memories` |
 | Messages | One row per message, `(session_id, idx)` key, the message as JSON **text** plus its SHA-256. Text keeps the exact round trip; `jsonb` would reject `\u0000` and reorder keys |
 | Session save | One transaction: lock the `sessions` row (`FOR UPDATE`), compare revision, find the first changed message by hash, delete from there, insert the rest, then update revision, count and compaction |
 | Durability | `SET LOCAL synchronous_commit = on` in every write transaction, so a server-level `off` cannot weaken it |
-| Journal serialization | `begin` and `resolve` lock the `journals` row for their journal ID (`SELECT … FOR UPDATE`), then check and insert, as SQLite's `BEGIN IMMEDIATE` does today |
-| Memory search | Generated column `to_tsvector('simple', text)`, declared `STORED` (PostgreSQL 18 defaults generated columns to virtual, which cannot be indexed) with a GIN index; the query is built from lower-case alphanumeric words joined with `\|` and passed as a parameter to `to_tsquery('simple', …)`, ranked by `ts_rank` |
+| Journal serialization | `begin` and `resolve` lock the `journals` row for their journal ID (`SELECT … FOR UPDATE`), then check and insert |
+| Memory search | A GIN-indexed array of lower-case ASCII words selects scoped candidates; application code ranks them by matching words, recency and ID |
 | Retries | None for writes. A connection lost during `COMMIT` is reported as a failure; for the journal, that leaves at most a `started` record, which requires recovery |
 
 ### 5.2 MongoDB 9.0
@@ -242,12 +238,12 @@ get the same subcommands with the same output and confirmation rules:
 | Concern | Design |
 | --- | --- |
 | Deployment | A replica set is required (a single node is enough), because sessions and the journal use multi-document transactions |
-| Layout | One database (configurable); collections `lh_meta`, `lh_sessions`, `lh_session_messages`, `lh_journals`, `lh_journal_runs`, `lh_journal_actions`, `lh_memories`, each with a `$jsonSchema` validator |
+| Layout | One database (configurable); collections `lh_meta`, `lh_sessions`, `lh_session_messages`, `lh_journals`, `lh_journal_runs`, `lh_journal_actions`, `lh_memory_namespaces`, `lh_memories`, each with a `$jsonSchema` validator |
 | Messages | One document per message, holding the message as a JSON **string**. Keys the model chooses (such as `$where` or `a.b`) never become BSON field names, and no session approaches the 16 MiB document limit |
 | Session save | One transaction: compare-and-set `revision` on the `lh_sessions` document, delete from the first changed index, insert the rest |
 | Durability | Write concern `{w: "majority", j: true}` and read concern `majority` for loads; transactions use `snapshot` |
 | Journal serialization | `begin` and `resolve` increment a counter on the `lh_journals` document inside the transaction. MongoDB detects only write-write conflicts, so this write is what stops two concurrent `begin` calls from both passing the check |
-| Memory search | Compound text index `{namespace: 1, text: "text"}` with `default_language: "none"`; the equality prefix makes every search name a namespace. `$text` matches any word; sort by `textScore`, then `created_at`, then `_id` |
+| Memory search | A compound multikey index over store ID, namespace and lower-case ASCII word array selects candidates; application code ranks them by matching words, recency and ID |
 | Retries | Only the driver's labelled cases: `TransientTransactionError` reruns the whole transaction (nothing was committed) and `UnknownTransactionCommitResult` retries the commit, both within the 5-second bound. If the outcome is still unknown, the call fails; a journal `begin` then authorizes nothing |
 | Crashed writer | Transactions belong to logical sessions, not connections, so a process that dies mid-transaction leaves it open on the server, holding its uncommitted writes, until `transactionLifetimeLimitSeconds` (60 by default) or an operator's `killSessions`. Loads still return the last committed revision; saves and journal writes to the same session or journal fail closed with `SessionStoreError` or `JournalError` until then |
 | Clients | One `MongoClient` (connection pool) per connection string per process, closed at exit; applications may pass their own `client=` instead |
@@ -287,6 +283,6 @@ Settled in Phase 0 of the [plan](STORAGE_PLAN.md):
    `.github/workflows/storage.yml`.
 
 Still open: MongoDB Atlas Search and Vector Search could serve a later vector
-revision; revision 1 uses only the server's own text index, so it runs on a local
+revision; revision 1 uses a standard multikey index, so it runs on a local
 replica set.
 

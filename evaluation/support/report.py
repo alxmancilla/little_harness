@@ -20,8 +20,8 @@ def markdown_report(summary, rows):
              "Expectations are an unreviewed synthetic draft. Offline behavior is scripted, not an LLM.",
              "Factual correctness, citation support, appropriate escalation and action safety require human review.",
              "See cases.json, evidence.json, results.jsonl and review.json. Invalid outputs remain in the denominator.",
-             "", "| Case | Status | Valid output | Escalation matches draft | Required citations |",
-             "| --- | --- | --- | --- | --- |"]
+             "", "| Case | Status | Valid output | Escalation matches draft | Required citations | Memory exposure met |",
+             "| --- | --- | --- | --- | --- | --- |"]
     for row in rows:
         values = ["yes" if value else "no" for value in row["checks"].values()]
         lines.append(f"| {row['id']} | {row['status']} | " + " | ".join(values) + " |")

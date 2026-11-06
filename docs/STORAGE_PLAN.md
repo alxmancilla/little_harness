@@ -1,9 +1,12 @@
 # Little Harness storage plan and checkpoints
 
 Companion: [storage specification](STORAGE_SPEC.md). Each phase is a bounded
-checkpoint with its own gate; no phase changes default behavior or file formats.
+checkpoint with its own gate. Historical checkpoints below describe the decisions
+at the time; the current PostgreSQL/MongoDB-only journal and memory design supersedes
+their SQLite references. Session JSON remains supported.
 
-**Current state: Phases 0–3 complete; Phase 4 next.** Python 3.11+ is in place.
+**Current state: Phases 0–4 implemented; database memory adapters implemented early.**
+Timed memory workers and release review remain. Python 3.11+ is in place.
 
 Every gate includes: `python3 -m unittest -q` offline on Python 3.11 and 3.14 with no
 third-party packages installed, CI green on 3.11–3.14, docs updated with the code,
@@ -144,7 +147,7 @@ Gate: SAC-01 to SAC-08 and SAC-13 pass against MongoDB 9.0 in `storage.yml`.
 - **Finding, now in spec 5.2:** unlike PostgreSQL, a process that dies mid-transaction
   leaves the transaction open on the server for `transactionLifetimeLimitSeconds`
   (60 by default). The test asserts the safe behavior: the last saved state loads,
-  saves fail closed until `killAllSessions`, then succeed.
+  saves fail closed until the crashed session is ended with `killSessions`, then succeed.
 - `tests/test_storage_mongodb.py` mirrors the PostgreSQL tests (conformance suites,
   SAC-03, SAC-06, SAC-07, SAC-08, SAC-13, CLI, missing driver), plus validators
   rejecting malformed documents. Removing the counter write makes SAC-07 fail.
@@ -157,8 +160,8 @@ Gate: SAC-01 to SAC-08 and SAC-13 pass against MongoDB 9.0 in `storage.yml`.
 ## Phase 4 — memory in the core
 
 1. `harness/memory.py`: `MemoryStore` protocol, `MemoryRecord`, `MemoryStoreError`,
-   `memory_tools(...)` and a standard-library SQLite reference store.
-2. `MemoryStoreConformanceTests`, run against the SQLite reference.
+   and `memory_tools(...)`; durable stores live in PostgreSQL and MongoDB adapters.
+2. `MemoryStoreConformanceTests`, run against both database stores.
 3. A support-assistant example or lesson showing `recall` and an approved `remember`,
    with `ToolPolicy(read_only=True)` blocking writes.
 4. Evaluation: memory-poisoning cases in the support evaluation, where a stored
@@ -166,13 +169,25 @@ Gate: SAC-01 to SAC-08 and SAC-13 pass against MongoDB 9.0 in `storage.yml`.
 5. Docs: `HARNESS_SPEC.md` (new FR), `REFERENCE.md`, `ARCHITECTURE.md`, `LEARN.md`
    if a lesson is added.
 
-Gate: SAC-09 to SAC-12 pass on SQLite; no memory text in default traces or events;
-`harness/` stays at roughly 2,200 lines or fewer.
+Gate: SAC-09 to SAC-12 pass on the databases; no memory text in default traces or events.
+The user accepted exceeding the original approximately 2,200-line runtime target.
+
+### Phase 4 checkpoint — implemented locally, revised storage choice
+
+- Scoped memory tools, shared conformance tests and support poisoning cases are
+  implemented. PostgreSQL and MongoDB provide the durable memory stores; quota checks
+  and writes share a serialized transaction. Namespaces do not provide access control,
+  and deletion does not remove copies from sessions, backups or snapshots.
+- The current inline tools cannot be used with agent-wide isolated tool timeouts;
+  JSON-bound workers remain Phase 5 work. The support evaluation verifies that each
+  poisoned memory was actually exposed, but answer safety still needs human review.
+- The user accepted a larger runtime than the approximately 2,200-line target.
+  SQLite journal and memory implementations were subsequently removed. CI requires a push.
 
 ## Phase 5 — PostgreSQL 18 and MongoDB 9.0 memory
 
-1. `PostgresMemoryStore` (stored generated `tsvector` column, GIN index) and
-   `MongoMemoryStore` (compound text index with a namespace prefix).
+1. `PostgresMemoryStore` (GIN-indexed word array) and `MongoMemoryStore` (compound
+   multikey index with store and namespace prefix) are implemented.
 2. Memory conformance suite against both; namespace isolation, quota and purge tests.
 3. Timed memory tools via a JSON-bound configuration, with `worker_env` passing only
    the connection variable.

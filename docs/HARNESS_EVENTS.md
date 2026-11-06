@@ -26,7 +26,7 @@ tuples inside events. The callback cannot mutate model arguments through the eve
   `model_call` numbers include compaction and reset each task. HTTP retries inside
   a provider client do not create separate logical model events.
 - Observations are not a durable queue, replay log, execution authority or proof
-  of external effects. Use the SQLite journal for crash recovery. Existing trace
+  of external effects. Use a PostgreSQL or MongoDB journal for crash recovery. Existing trace
   kinds and saved-session formats are unchanged; callbacks are not persisted.
 
 ## Event kinds

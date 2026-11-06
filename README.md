@@ -78,7 +78,7 @@ environment or `.env`.
 
 | Location | Responsibility |
 | --- | --- |
-| [harness/](harness/) | Reusable loop, tool registry, provider clients, budgets, events, policies, workers and SQLite journal |
+| [harness/](harness/) | Reusable loop, tool registry, provider clients, budgets, events, policies, workers and storage interfaces |
 | [agents/teaching/](agents/teaching/) | Teaching tools, explicit configuration, factories, scripted demos and CLI |
 | [agents/hotpotqa/](agents/hotpotqa/) | Restricted question-answering tools, single-agent and researcher/reviewer workflows, shared worker helpers |
 | [evaluation/hotpotqa/](evaluation/hotpotqa/) | Dataset preparation, per-question execution, host-only scoring and comparisons |
@@ -199,7 +199,7 @@ checks from unscored human review. Paid model calls require explicit `--live`.
 Optional controls are passed explicitly to `Agent`: per-task budgets (`limits=`),
 tool policies (`tool_policy=`), human approval (`approve=`), event callbacks (`on_event=`),
 tool timeouts (`tool_timeout_seconds=`), the timed-tool worker environment (`worker_env=`),
-crash-recovery journaling (`journal_path=` or `journal=`),
+crash-recovery journaling (`journal=`),
 session persistence (`session_path=` or `session_store=`) and between-step steering (`get_steering=`).
 See the [execution controls reference](docs/REFERENCE.md#execution-controls),
 including [isolated tool timeouts](docs/REFERENCE.md#isolated-tool-timeouts) and
@@ -263,4 +263,4 @@ GitHub Actions runs the same command on Python 3.11 through 3.14 for every push 
 - [Tool policies and approval ordering](docs/TOOL_POLICIES.md)
 - [HotpotQA comparison workflow](datasets/HOTPOTQA_BASELINE.md)
 - [Separation contract](docs/HARNESS_SEPARATION_SPEC.md) and [migration checkpoints](docs/HARNESS_MIGRATION_PLAN.md)
-- Proposed: [storage specification](docs/STORAGE_SPEC.md) and [plan](docs/STORAGE_PLAN.md) for PostgreSQL and MongoDB state, journal and memory
+- [Storage specification](docs/STORAGE_SPEC.md) and [plan](docs/STORAGE_PLAN.md) for PostgreSQL and MongoDB state, journal and memory

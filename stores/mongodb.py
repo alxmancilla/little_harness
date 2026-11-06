@@ -1,7 +1,7 @@
-"""MongoDB 9.0 session store and action journal (docs/STORAGE_SPEC.md, section 5.2).
+"""MongoDB 9.0 session, journal and memory stores (docs/STORAGE_SPEC.md, section 5.2).
 
 Needs the optional extra: uv sync --extra mongodb, and a replica set (one member is
-enough) because saves and journal checks use transactions. Connection settings come
+enough) because session, journal and memory operations use transactions. Connection settings come
 from an environment variable named by the application, or an application-supplied
 MongoClient; they never appear in errors, traces or command lines.
 
@@ -21,6 +21,7 @@ from uuid import uuid4
 
 from harness.journal import (JournalError, JournalRecoveryRequired, check_inspect_limit, check_outcome,
                              check_resolution, inspection_record)
+from harness.memory import MemoryRecord, MemoryStoreError, _limit, _namespace, _rank, _text, _validate_add, _WORDS
 from harness.session import (SESSION_VERSION, SessionConflictError, SessionLoadError, SessionStoreError,
                              validate_session)
 from stores._common import APPLICATION, SCHEMA_VERSION, check_id, storage_main
@@ -57,7 +58,14 @@ COLLECTIONS = {
                                 "tool_name": STRING, "risky": BOOL, "started_at": DATE, "finished_at": NULLABLE("date"),
                                 "status": STRING, "outcome_unknown": BOOL, "resolution": NULLABLE("string"),
                                 "resolved_at": NULLABLE("date")},
-                               [([("journal_id", 1), ("resolution", 1)], False)])}}
+                               [([("journal_id", 1), ("resolution", 1)], False)])},
+    "memory": {
+        "lh_memory_namespaces": ({"_id": STRING, "store_id": STRING, "namespace": STRING, "seq": INT}, []),
+        "lh_memories": ({"_id": STRING, "store_id": STRING, "namespace": STRING, "text": STRING,
+                         "kind": STRING, "created_by": STRING, "created_at": DATE, "run_id": NULLABLE("string"),
+                         "words": {"bsonType": "array", "items": STRING}},
+                        [([("store_id", 1), ("namespace", 1), ("words", 1)], False),
+                         ([("store_id", 1), ("namespace", 1), ("created_at", -1), ("_id", 1)], False)])}}
 
 
 def _now():
@@ -240,8 +248,100 @@ class MongoSessionStore(_MongoStorage):
         self.revision, self._hashes = self.revision + 1, hashes
 
 
+class MongoMemoryStore(_MongoStorage):
+    """Scoped memory with transactionally serialized quotas and indexed word lookup."""
+
+    component = "memory"
+
+    def __init__(self, store_id, *, uri_env=None, client=None, database="little_harness", timeout=5, quota=10000):
+        if type(quota) is not int or quota < 1:
+            raise ValueError("quota must be a positive integer")
+        super().__init__(store_id, uri_env=uri_env, client=client, database=database, timeout=timeout)
+        self.quota = quota
+
+    def _error(self):
+        return MemoryStoreError()
+
+    def _ensure(self):
+        if not self._ready:
+            self.prepare()
+
+    def _serialize(self, db, session, namespace):
+        key = hashlib.sha256((self.name + "\0" + namespace).encode()).hexdigest()
+        db.lh_memory_namespaces.update_one(
+            {"_id": key}, {"$setOnInsert": {"store_id": self.name, "namespace": namespace}, "$inc": {"seq": 1}},
+            upsert=True, session=session)
+
+    @staticmethod
+    def _record(row):
+        moment = row["created_at"]
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return MemoryRecord(row["_id"], row["namespace"], row["text"], row["kind"], row["created_by"],
+                            moment.isoformat(), row["run_id"])
+
+    def add(self, namespace, text, *, kind, created_by, run_id=None):
+        _validate_add(namespace, text, kind, created_by, run_id)
+        self._ensure()
+        memory_id = uuid4().hex
+
+        def write(db, session):
+            self._serialize(db, session, namespace)
+            scope = {"store_id": self.name, "namespace": namespace}
+            if db.lh_memories.count_documents(scope, session=session) >= self.quota:
+                raise MemoryStoreError()
+            db.lh_memories.insert_one({"_id": memory_id, **scope, "text": text, "kind": kind,
+                                       "created_by": created_by, "created_at": _now(), "run_id": run_id,
+                                       "words": sorted(set(_WORDS.findall(text.lower())))}, session=session)
+
+        self._run(write)
+        return memory_id
+
+    def search(self, namespace, query, *, limit=5):
+        _namespace(namespace)
+        _text(query, 500, "query")
+        _limit(limit, 20)
+        words = set(_WORDS.findall(query.lower()))
+        self._ensure()
+        rows = self._run(lambda db, session: list(db.lh_memories.find(
+            {"store_id": self.name, "namespace": namespace, "words": {"$in": list(words)}}, session=session)))
+        return _rank([self._record(row) for row in rows], words, limit)
+
+    def list(self, namespace, *, limit=100):
+        _namespace(namespace)
+        _limit(limit, 1000)
+        self._ensure()
+        rows = self._run(lambda db, session: list(db.lh_memories.find(
+            {"store_id": self.name, "namespace": namespace}, session=session)
+            .sort([("created_at", DESCENDING), ("_id", ASCENDING)]).limit(limit)))
+        return [self._record(row) for row in rows]
+
+    def delete(self, namespace, memory_id):
+        _namespace(namespace)
+        _text(memory_id, 200, "memory_id")
+        self._ensure()
+
+        def write(db, session):
+            self._serialize(db, session, namespace)
+            return bool(db.lh_memories.delete_one({"_id": memory_id, "store_id": self.name,
+                                                   "namespace": namespace}, session=session).deleted_count)
+
+        return self._run(write)
+
+    def purge(self, namespace):
+        _namespace(namespace)
+        self._ensure()
+
+        def write(db, session):
+            self._serialize(db, session, namespace)
+            return db.lh_memories.delete_many({"store_id": self.name, "namespace": namespace},
+                                              session=session).deleted_count
+
+        return self._run(write)
+
+
 class MongoJournal(_MongoStorage):
-    """An ActionJournal with the guarantees of ExecutionJournal (FR-08, ST-03).
+    """A durable ActionJournal (FR-08, ST-03).
 
     begin and resolve first increment a counter on this journal's document. MongoDB
     detects only write-write conflicts, so that write is what makes concurrent calls
@@ -374,7 +474,8 @@ def main(argv=None):
     storage_main(argv, description=__doc__, backend="MongoDB", env_option="--uri-env",
                  location_option="--database", default_location="little_harness",
                  session_store=lambda name, env, database: MongoSessionStore(name, uri_env=env, database=database),
-                 journal=lambda name, env, database: MongoJournal(name, uri_env=env, database=database))
+                 journal=lambda name, env, database: MongoJournal(name, uri_env=env, database=database),
+                 memory_store=lambda name, env, database: MongoMemoryStore(name, uri_env=env, database=database))
 
 
 if __name__ == "__main__":

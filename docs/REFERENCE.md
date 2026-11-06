@@ -56,7 +56,8 @@ Live startup prints the selected provider, model and a credential-filtered endpo
 | `HARNESS_MAX_SECONDS` | Unset | Cooperative task deadline in seconds |
 | `HARNESS_TOOL_TIMEOUT_SECONDS` | Unset | Positive timeout for isolated tool execution |
 | `HARNESS_READ_ONLY` | `0` | `1` permits only explicitly read-only tools |
-| `HARNESS_JOURNAL` | Unset | SQLite journal path outside application-writable directories |
+| `HARNESS_JOURNAL_BACKEND`, `HARNESS_JOURNAL_ID` | Unset | Teaching CLI journal backend (`postgres` or `mongodb`) and stable journal ID |
+| `HARNESS_POSTGRES_DSN`, `HARNESS_MONGODB_URI` | Unset | Connection string for the selected teaching CLI journal backend |
 | `HARNESS_TRACE_CONTENT` | `0` | Teaching CLI only: `1` explicitly includes potentially sensitive content in traces |
 
 Runtime library callers pass controls explicitly to `Agent`. HotpotQA evaluation
@@ -74,7 +75,7 @@ budget, timeout, policy or journal settings.
 | Trace privacy | `trace_include_content=False` | JSONL metadata only by default; content opt-in is independent of event settings |
 | Tool timeouts | `tool_timeout_seconds=` or tool decorator | Worker processes do not provide security isolation |
 | Worker environment | `worker_env={...}` | Replaces the environment of timed-tool workers only; inline tools still see the parent's |
-| Crash recovery | `journal_path=`, or `journal=` with any `ActionJournal` | Human-reviewed outcomes, not automatic replay or exactly-once effects |
+| Crash recovery | `journal=` with an `ActionJournal` | Human-reviewed outcomes, not automatic replay or exactly-once effects |
 | Conversation persistence | `session_path=`, or `session_store=` with any `SessionStore` | Saved history alone cannot establish whether an action completed |
 | Between-step steering | `get_steering=callable` | Called only after a saved tool batch; text guides the model but cannot authorize tools or cancel a running one |
 
@@ -108,10 +109,9 @@ stopping a worker does not undo them.
 
 ### Recover without replaying
 
-Opt into journaling with `HARNESS_JOURNAL=execution.sqlite3` or `journal_path=`.
-Keep the journal on a trusted local filesystem, outside writable roots and separate
-from traces/sessions; its parent must exist. Custom applications declare their
-writable directories through `writable_roots=` and enforce their own tool paths.
+Opt into journaling by passing a PostgreSQL or MongoDB `ActionJournal` as `journal=`.
+For the teaching CLI, set `HARNESS_JOURNAL_BACKEND` and `HARNESS_JOURNAL_ID` and
+provide the matching connection variable. Protect the database and its credentials.
 
 The journal commits action metadata before dispatch and records the outcome after.
 It stores no tool arguments or outputs. Uncertain actions and unfinished runs with
@@ -119,26 +119,22 @@ actions block new tasks before model calls. Keep the same journal across restart
 
 Stop affected processes, inspect pending records and verify external effects first:
 
-````sh
-python3 -m harness inspect execution.sqlite3 --pending --limit 100
-````
+Use the database-specific `journal inspect` command below.
 
 Only after human verification, replace `ACTION_ID` with the inspected ID and record
 the actual outcome (`completed`, `failed` or `not_run`):
 
-````sh
-python3 -m harness resolve execution.sqlite3 ACTION_ID --outcome completed --confirm
-````
+Use the corresponding `journal resolve` command with `--confirm`.
 
 Resolution never executes tools, restores outputs or repairs the conversation.
-Review saved history before continuing. Journaling is a local, single-owner recovery
+Review saved history before continuing. Journaling is a single-owner recovery
 aid, not a distributed scheduler or an exactly-once guarantee.
 
 ### PostgreSQL sessions and journals (optional)
 
 `stores.postgres` provides `PostgresSessionStore` and `PostgresJournal` for
 PostgreSQL 18, passed as `session_store=` and `journal=`. They keep the file
-store's and SQLite journal's guarantees and add a check against a second writer
+session and journal contracts and add a check against a second session writer
 ([storage specification](STORAGE_SPEC.md)). Install the driver, then name the
 environment variable that holds the connection string; never pass the string itself:
 
@@ -166,7 +162,7 @@ agent = Agent(model, system, tools=tools, session_store=PostgresSessionStore("us
   synchronously. Errors carry fixed messages, never the driver's text.
 - **One writer per session.** A second agent saving the same session ID gets
   `SessionConflictError`, and the first agent's save is kept.
-- **Recovery** uses the same rules and output as the SQLite journal:
+- **Recovery** uses the shared journal rules:
 
 ````sh
 python -m stores.postgres journal inspect --dsn-env APP_POSTGRES_DSN --journal-id support-worker --pending
@@ -214,10 +210,52 @@ agent = Agent(model, system, tools=tools, session_store=MongoSessionStore("user-
 
 `compose.yaml` also starts a single-node MongoDB 9.0 replica set on `127.0.0.1:57017`.
 
+### Long-term memory (optional)
+
+`PostgresMemoryStore` and `MongoMemoryStore` keep persistent memory separate from session
+history and the action journal. Construct it explicitly; nothing is injected into
+the model context without a `recall` call. For example, the support factory can
+bind an application-selected namespace:
+
+````python
+from harness import ToolPolicy
+from examples import support_agent
+from stores.postgres import PostgresJournal, PostgresMemoryStore
+store = PostgresMemoryStore("support", dsn_env="APP_POSTGRES_DSN")
+agent = support_agent.create_agent(model, documents, products, memory_store=store,
+    memory_namespace="tenant:42/user:7", quiet=False, tool_policy=ToolPolicy(),
+    journal=PostgresJournal("support-worker", dsn_env="APP_POSTGRES_DSN"))
+````
+
+With this configuration `recall` is read-only and `remember`/`forget` ask for human
+approval before the journal records and executes them. The support factory's default
+`ToolPolicy(read_only=True)` blocks both writes; `memory_tools(..., allow_write=False)`
+also omits them entirely. Never auto-approve based on model or memory text.
+
+- Namespaces are scope labels, **not access control**; the application must enforce
+  authorization and protect the database and its credentials.
+- Each namespace defaults to 10,000 records; full quotas reject additions without
+  eviction. Text is limited to 2,000 characters; `search` uses case-insensitive ASCII
+  word matches and ranks by shared words, recency and ID. Both adapters use indexed
+  word arrays to find candidates, then rank them in the application.
+- `recall` returns JSON marked `untrusted`; complete records that do not fit are
+  omitted. An output limit too small even for an empty envelope fails the tool.
+  Instructions inside memory have no authority, but a model can still follow them.
+- `delete` and `purge` delete records. This does not erase copies in backups,
+  previously saved sessions, traces, filesystem snapshots
+  or storage hardware. Protect those separately.
+- These bindings run inline. Agent-wide tool timeouts require an importable worker
+  function and therefore cannot run these closures; JSON-configured timed memory
+  workers are planned for Phase 5. Default traces and events omit memory content;
+  content opt-ins, session history and model output may contain it.
+- The support evaluation includes synthetic, unreviewed memory-poisoning cases. Its
+  `cases.json` retains the synthetic memory; per-case fixtures are ephemeral. Exposure checks
+  only establish that the model received it, not that the answer resisted it.
+
 ## Teaching tools and retrieval
 
-The teaching application provides the following tools; the core runtime has none
-built in. Live `write_file` and `http_get` requests require approval by default.
+The teaching application provides the following tools; these are not built into the
+core runtime. Live `write_file` and `http_get` requests require approval by default.
 
 | Tool | Behavior |
 | --- | --- |
@@ -330,6 +368,7 @@ python3 -m unittest -v tests.test_learning_onboarding
 python3 -m unittest -v tests.test_learning_capstone
 python3 -m unittest -v tests.test_tool_contracts tests.test_trace_privacy tests.test_support_agent tests.test_runtime_distribution
 python3 -m unittest -v tests.test_support_evaluation
+python3 -m unittest -v tests.test_memory tests.test_storage_conformance
 ````
 
 After preparing the full development set, include the installed-data checks with

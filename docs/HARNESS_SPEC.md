@@ -68,9 +68,11 @@ is an execution boundary for timeouts, **not** a security boundary.
 | `get_steering()` | Optional; called after each saved tool batch that passed the budget check. Nonempty text is appended as a text block to that user turn and saved before the next model call; `None`/blank adds nothing; other values raise `ValueError`. It is guidance, not authorization |
 | `trace_context={...}` | Optional JSON trace annotations, copied at construction; reserved `ts`, `kind`, `run_id` keys rejected |
 | `trace_include_content=False` | Metadata-only JSONL by default; `True` includes tasks/model/tool/summary/error content independently of events |
-| `ExecutionJournal.inspect()` / `resolve(...)` | Offline inspection and explicitly confirmed human outcome recording |
+| `ActionJournal.inspect()` / `resolve(...)` | Inspection and explicitly confirmed human outcome recording |
 | `session_store=` (a `SessionStore`) | Optional replacement for `session_path`, never combined with it: `load()` returns `(messages, compaction)` or `None`; `save(messages, compaction, *, durable)` is all-or-nothing. `SessionFile(path)` is the file implementation |
-| `journal=` (an `ActionJournal`) | Optional replacement for `journal_path`, never combined with it: the `ExecutionJournal` methods `prepare`, `assert_ready`, `begin`, `finish`, `close_run`, `inspect`, `resolve`, with its errors and guarantees (FR-08) |
+| `journal=` (an `ActionJournal`) | Optional journal with `prepare`, `assert_ready`, `begin`, `finish`, `close_run`, `inspect`, `resolve`, with its errors and guarantees (FR-08) |
+| `MemoryStore` | Explicit namespace-scoped long-term memory; database implementations are in `stores/` |
+| `memory_tools(store, namespace, allow_write=True)` | Bound `recall`, `remember`, `forget` registry; writes are risky and may be omitted |
 
 `harness.Agent` requires an explicit keyword-only `tools` mapping; `None` is invalid.
 `ToolRegistry.tool(...)` registers into that application-owned mapping. An explicit
@@ -104,7 +106,7 @@ Supported embedding surface (validated by teaching, HotpotQA and inventory clien
 - The runtime never terminates the host process. Configuration and session problems
   raise `ModelConfigError` or `SessionLoadError`, both subclasses of `ValueError`;
   command-line applications catch them and choose the exit message and code.
-- Recovery exports are `ActionJournal`, `ExecutionJournal`, `JournalError` and
+- Recovery exports are `ActionJournal`, `JournalError` and
   `JournalRecoveryRequired`; `validate_tool_input` is also public.
 - Session exports are `SessionStore`, `SessionFile`, `validate_session`,
   `SessionStoreError` (an `OSError`, so existing file-error handlers still catch it)
@@ -243,9 +245,8 @@ may propose another call; this is distinct from automatic execution retry.
 
 ### FR-08 — Journal actions durably when enabled
 
-With `journal_path` (SQLite) or a `journal=` implementation, the parent MUST commit
-`started` before invocation and commit an outcome afterward, durably (SQLite uses full
-synchronous commits). No start commit means no
+With a `journal=` implementation, the parent MUST commit
+`started` before invocation and commit an outcome afterward, durably. No start commit means no
 dispatch. Denied, invalid and truncated requests MUST create no action record.
 Records MUST omit arguments, outputs and exception details.
 
@@ -347,6 +348,16 @@ fingerprints and reject incompatible references before workers run. Offline qual
 scores MUST remain null. Matching recorded settings MUST NOT be presented as proof
 of unchanged provider behavior or a general multi-agent accuracy advantage.
 
+### FR-15 — Expose bounded memory as untrusted data
+
+Applications MAY bind a namespace to memory tools; the model MUST NOT select the
+namespace. `recall` returns bounded JSON marked untrusted; `remember` and `forget`
+use the ordinary risky-action approval, policy and journal gates. Model-created
+memories carry their actual run ID. Default traces and events omit memory content.
+Database stores apply namespace quotas transactionally and never evict on a full
+quota. Namespaces are labels, not authorization. Memory cannot guarantee a model
+will ignore injected instructions. See [storage spec](STORAGE_SPEC.md#33-memorystore-and-memory-tools-in-harnessmemorypy).
+
 ## 5. Terminal states and invariants
 
 | Run status | Meaning / representative stop reasons |
@@ -411,6 +422,7 @@ Paths below are relative to `tests/`; scenarios summarize existing regression co
 | AC-10 / FR-12 | Model endpoint redirects or emits diagnostic errors | Redirect blocked; diagnostic content absent from ordinary results/traces | `test_model_clients.py`, `test_mini_harness.py` |
 | AC-13 / FR-12 | The same text, tool-call, stream-failure and HTTP-failure scenarios reach each adapter | Identical normalized responses; identical error categories; no retry after streaming began | `test_mini_harness.py` (`ProviderConformanceTests`) |
 | AC-14 / FR-08,09 | The same session and journal scenarios reach each storage backend | Exact round trips, rewrites before the latest message, invalid data rejected, recovery required after an unfinished action, second writer refused where supported | `test_storage_conformance.py` (`storage_conformance.py` suites) |
+| AC-15 / FR-15 | Scoped memory, denied writes and poisoned recall | Namespace isolation and quota; denied writes create no journal action; recalled text is marked untrusted and omitted from default observations | `test_memory.py`, `test_storage_conformance.py`, `test_support_evaluation.py` |
 | AC-11 / FR-13 | Malicious text is retrieved from an approved document | Evidence remains data, with corpus/output limits and source metadata | `test_mini_harness.py` |
 | AC-12 / FR-14 | Offline paired evaluation or mismatched reference | Null quality; shared role budgets; mismatch rejected before inference | `test_evaluate_hotpotqa.py`, `test_hotpotqa_multi_agent.py` |
 
@@ -432,9 +444,8 @@ mechanics, not real-model prompt-injection resistance or answer accuracy.
 
 ## 8. Operational limitations and change discipline
 
-Use trusted local files for journals, outside the writable workspace and separate
-from trace/session paths. Durability depends on storage; SQLite uses a bounded lock
-wait. This is a single-owner recovery aid, not a concurrent scheduler. Keep the same
+Protect the database and connection credentials. Durability depends on storage.
+This is a single-owner recovery aid, not a concurrent scheduler. Keep the same
 journal across restarts; switching/removing it bypasses recovery protection.
 
 Read-only tools can disclose data. Workers inherit credentials, filesystem and

@@ -1,4 +1,4 @@
-"""PostgreSQL 18 session store and action journal (docs/STORAGE_SPEC.md, section 5.1).
+"""PostgreSQL 18 session, journal and memory stores (docs/STORAGE_SPEC.md, section 5.1).
 
 Needs the optional extra: uv sync --extra postgres. Connection settings come from an
 environment variable named by the application, or from an application-supplied
@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from harness.journal import (JournalError, JournalRecoveryRequired, check_inspect_limit, check_outcome,
                              check_resolution, inspection_record)
+from harness.memory import MemoryRecord, MemoryStoreError, _limit, _namespace, _rank, _text, _validate_add, _WORDS
 from harness.session import (SESSION_VERSION, SessionConflictError, SessionLoadError, SessionStoreError,
                              validate_session)
 from stores._common import APPLICATION, SCHEMA_VERSION, check_id, storage_main
@@ -32,7 +33,8 @@ except ImportError:
 CONNECT_TIMEOUT_SECONDS = 10
 SCHEMA_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}")
 TABLES = {"session": ("sessions", "session_messages"),
-          "journal": ("journals", "journal_runs", "journal_actions")}
+          "journal": ("journals", "journal_runs", "journal_actions"),
+          "memory": ("memory_namespaces", "memories")}
 DDL = {
     "session": """
         CREATE TABLE {schema}.sessions (
@@ -53,7 +55,17 @@ DDL = {
             started_at timestamptz NOT NULL, finished_at timestamptz, status text NOT NULL,
             outcome_unknown boolean NOT NULL DEFAULT false, resolution text, resolved_at timestamptz,
             FOREIGN KEY (journal_id, run_id) REFERENCES {schema}.journal_runs);
-        CREATE INDEX ON {schema}.journal_actions (journal_id) WHERE resolution IS NULL;"""}
+        CREATE INDEX ON {schema}.journal_actions (journal_id) WHERE resolution IS NULL;""",
+    "memory": """
+        CREATE TABLE {schema}.memory_namespaces (
+            store_id text NOT NULL, namespace text NOT NULL, PRIMARY KEY (store_id, namespace));
+        CREATE TABLE {schema}.memories (
+            memory_id text PRIMARY KEY, store_id text NOT NULL, namespace text NOT NULL,
+            text text NOT NULL, kind text NOT NULL, created_by text NOT NULL,
+            created_at timestamptz NOT NULL, run_id text, words text[] NOT NULL,
+            FOREIGN KEY (store_id, namespace) REFERENCES {schema}.memory_namespaces);
+        CREATE INDEX ON {schema}.memories (store_id, namespace, created_at DESC, memory_id);
+        CREATE INDEX ON {schema}.memories USING gin (words);"""}
 PENDING = "a.resolution IS NULL AND (NOT r.closed OR a.outcome_unknown OR a.status = 'started')"
 ACTIONS = """{schema}.journal_actions a JOIN {schema}.journal_runs r USING (journal_id, run_id)"""
 
@@ -224,11 +236,100 @@ class PostgresSessionStore(_PostgresStorage):
         self.revision, self._hashes = stored + 1, hashes
 
 
+class PostgresMemoryStore(_PostgresStorage):
+    """Scoped memory with serialized per-namespace quota checks and indexed word lookup."""
+
+    component = "memory"
+
+    def __init__(self, store_id, *, dsn_env=None, connect=None, schema="little_harness", statement_timeout=5,
+                 quota=10000):
+        if type(quota) is not int or quota < 1:
+            raise ValueError("quota must be a positive integer")
+        super().__init__(store_id, dsn_env=dsn_env, connect=connect, schema=schema,
+                         statement_timeout=statement_timeout)
+        self.quota = quota
+
+    def _error(self):
+        return MemoryStoreError()
+
+    def _lock_namespace(self, connection, namespace):
+        connection.execute(self._sql("INSERT INTO {schema}.memory_namespaces VALUES (%s, %s) "
+                                     "ON CONFLICT DO NOTHING"), (self.name, namespace))
+        connection.execute(self._sql("SELECT 1 FROM {schema}.memory_namespaces "
+                                     "WHERE store_id = %s AND namespace = %s FOR UPDATE"), (self.name, namespace))
+
+    def _ensure(self):
+        if not self._ready:
+            self.prepare()
+
+    @staticmethod
+    def _record(row):
+        return MemoryRecord(row["memory_id"], row["namespace"], row["text"], row["kind"], row["created_by"],
+                            row["created_at"].isoformat(), row["run_id"])
+
+    def add(self, namespace, text, *, kind, created_by, run_id=None):
+        _validate_add(namespace, text, kind, created_by, run_id)
+        self._ensure()
+        memory_id = uuid4().hex
+        with self._transaction() as connection:
+            self._lock_namespace(connection, namespace)
+            count = connection.execute(self._sql("SELECT count(*) AS n FROM {schema}.memories "
+                                                 "WHERE store_id = %s AND namespace = %s"),
+                                       (self.name, namespace)).fetchone()["n"]
+            if count >= self.quota:
+                raise MemoryStoreError()
+            connection.execute(self._sql("INSERT INTO {schema}.memories VALUES "
+                                         "(%s, %s, %s, %s, %s, %s, clock_timestamp(), %s, %s)"),
+                               (memory_id, self.name, namespace, text, kind, created_by, run_id,
+                                sorted(set(_WORDS.findall(text.lower())))))
+        return memory_id
+
+    def search(self, namespace, query, *, limit=5):
+        _namespace(namespace)
+        _text(query, 500, "query")
+        _limit(limit, 20)
+        words = set(_WORDS.findall(query.lower()))
+        self._ensure()
+        with self._transaction(read_only=True) as connection:
+            rows = connection.execute(self._sql("SELECT * FROM {schema}.memories WHERE store_id = %s "
+                                                "AND namespace = %s AND words && %s"),
+                                      (self.name, namespace, list(words))).fetchall()
+        return _rank([self._record(row) for row in rows], words, limit)
+
+    def list(self, namespace, *, limit=100):
+        _namespace(namespace)
+        _limit(limit, 1000)
+        self._ensure()
+        with self._transaction(read_only=True) as connection:
+            rows = connection.execute(self._sql("SELECT * FROM {schema}.memories WHERE store_id = %s "
+                                                "AND namespace = %s ORDER BY created_at DESC, memory_id LIMIT %s"),
+                                      (self.name, namespace, limit)).fetchall()
+        return [self._record(row) for row in rows]
+
+    def delete(self, namespace, memory_id):
+        _namespace(namespace)
+        _text(memory_id, 200, "memory_id")
+        self._ensure()
+        with self._transaction() as connection:
+            self._lock_namespace(connection, namespace)
+            return bool(connection.execute(self._sql("DELETE FROM {schema}.memories WHERE store_id = %s "
+                                                      "AND namespace = %s AND memory_id = %s"),
+                                           (self.name, namespace, memory_id)).rowcount)
+
+    def purge(self, namespace):
+        _namespace(namespace)
+        self._ensure()
+        with self._transaction() as connection:
+            self._lock_namespace(connection, namespace)
+            return connection.execute(self._sql("DELETE FROM {schema}.memories WHERE store_id = %s AND namespace = %s"),
+                                      (self.name, namespace)).rowcount
+
+
 class PostgresJournal(_PostgresStorage):
-    """An ActionJournal with the guarantees of ExecutionJournal (FR-08, ST-03).
+    """A durable ActionJournal (FR-08, ST-03).
 
     begin and resolve lock this journal's row first, so concurrent calls check and
-    write one at a time, as SQLite's BEGIN IMMEDIATE does. No retries: a failed or
+    write one at a time. No retries: a failed or
     ambiguous commit raises JournalError, so no tool is dispatched.
     """
 
@@ -332,7 +433,8 @@ def main(argv=None):
     storage_main(argv, description=__doc__, backend="PostgreSQL", env_option="--dsn-env",
                  location_option="--schema", default_location="little_harness",
                  session_store=lambda name, env, schema: PostgresSessionStore(name, dsn_env=env, schema=schema),
-                 journal=lambda name, env, schema: PostgresJournal(name, dsn_env=env, schema=schema))
+                 journal=lambda name, env, schema: PostgresJournal(name, dsn_env=env, schema=schema),
+                 memory_store=lambda name, env, schema: PostgresMemoryStore(name, dsn_env=env, schema=schema))
 
 
 if __name__ == "__main__":

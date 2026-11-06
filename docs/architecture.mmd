@@ -10,7 +10,7 @@ flowchart LR
         registry --> gates
         policy["ToolPolicy - harness/policy.py"] -.-> gates
         approval["Human or application approval"] -.-> gates
-        agent --> journal["ExecutionJournal - harness/journal.py"]
+        agent --> journal["ActionJournal interface - harness/journal.py"]
         gates -->|"optional durable start before invocation"| journal
         gates --> invoke["Agent._dispatch and _invoke_tool"]
         invoke -->|"default"| inline["Registered function - inline"]
@@ -25,14 +25,14 @@ flowchart LR
     invoke -->|"timeout configured - JSON over stdin"| worker
     worker -->|"outcome - no parent-memory mutation"| invoke
 
-    subgraph storage["Local artifacts - distinct responsibilities"]
+    subgraph storage["Storage - distinct responsibilities"]
         session[("Optional session JSON - conversation")]
         trace[("JSONL trace - content-rich diagnostics")]
-        sqlite[("Optional SQLite journal - action metadata")]
+        database[("Optional PostgreSQL or MongoDB journal - action metadata")]
     end
     agent --> session
     agent --> trace
-    journal --> sqlite
+    journal --> database
     recovery["Human recovery CLI - inspect and resolve, never replay"] --> journal
 
     subgraph access["Tool-accessible resources - governed by tool code and OS permissions"]

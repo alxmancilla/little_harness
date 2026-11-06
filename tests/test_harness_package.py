@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 from unittest import mock
 
-from harness import Agent, ExecutionJournal, RunLimits, ToolPolicy, ToolRegistry
+from harness import Agent, RunLimits, ToolPolicy, ToolRegistry
 from tests.helpers import Model, TemporaryDirectoryTestCase, call, usage_reply as reply
+from tests.storage_fakes import FakeJournal
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -129,18 +130,12 @@ class PackageTests(TemporaryDirectoryTestCase):
         )
         self.assertEqual(child.returncode, 0, child.stderr)
 
-    def test_multiple_writable_roots_and_journal_sidecar_collisions(self):
+    def test_multiple_writable_roots_with_explicit_journal(self):
         roots = (self.root / "first", self.root / "second")
-        for root in roots:
-            with self.subTest(root=root), self.assertRaisesRegex(ValueError, "outside"):
-                self.agent(Model(), {}, journal_path=root / "actions.sqlite", writable_roots=roots)
-        journal = self.root / "actions.sqlite"
-        for suffix in ("", "-journal", "-wal", "-shm"):
-            with self.subTest(suffix=suffix), self.assertRaisesRegex(ValueError, "separate"):
-                self.agent(Model(), {}, journal_path=journal, trace_path=Path(str(journal) + suffix))
-        agent = self.agent(Model(reply("safe")), {}, journal_path=journal, writable_roots=roots)
+        journal = FakeJournal()
+        agent = self.agent(Model(reply("safe")), {}, journal=journal, writable_roots=roots)
         self.assertEqual(agent.run_result("go").status, "completed")
-        self.assertEqual(ExecutionJournal(journal).inspect(), [])
+        self.assertEqual(journal.inspect(), [])
         self.assertFalse(any(root.exists() for root in roots))
 
     def test_core_policy_budget_events_and_output_cap(self):
@@ -173,7 +168,7 @@ class PackageTests(TemporaryDirectoryTestCase):
         approve, predicate = mock.Mock(return_value=True), mock.Mock(return_value=True)
         agent = self.agent(Model(call("action"), call("absent"), reply("done")), registry,
                            tool_admission=admission, approve=approve, tool_timeout_seconds=1,
-                           journal_path=self.root / "actions.sqlite",
+                           journal=FakeJournal(),
                            tool_policy=ToolPolicy(argument_checks={"action": predicate}))
         with mock.patch("harness.tool_execution.subprocess.Popen") as spawn:
             result = agent.run_result("go")
@@ -195,7 +190,7 @@ class PackageTests(TemporaryDirectoryTestCase):
         admission, approve = mock.Mock(return_value=None), mock.Mock(return_value=True)
         agent = self.agent(Model(call("action"), call("action", value="valid"), reply("done")), registry,
                            tool_admission=admission, approve=approve,
-                           tool_policy=ToolPolicy(read_only=True), journal_path=self.root / "actions.sqlite")
+                           tool_policy=ToolPolicy(read_only=True), journal=FakeJournal())
         result = agent.run_result("go")
         self.assertEqual(result.usage.tool_errors, 2)
         self.assertIn("missing", agent.messages[2]["content"][0]["content"])

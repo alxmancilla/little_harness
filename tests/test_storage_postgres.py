@@ -15,11 +15,12 @@ import unittest
 from unittest import mock
 from uuid import uuid4
 
-from harness import Agent, JournalError, JournalRecoveryRequired, SessionStoreError
+from harness import Agent, JournalError, JournalRecoveryRequired, MemoryStoreError, SessionStoreError
 from stores import postgres
-from stores.postgres import PostgresJournal, PostgresSessionStore
+from stores.postgres import PostgresJournal, PostgresMemoryStore, PostgresSessionStore
 from tests.helpers import REPO, RecordingModel, TemporaryDirectoryTestCase, reply
-from tests.storage_conformance import JournalConformanceTests, SessionStoreConformanceTests, history
+from tests.storage_conformance import (JournalConformanceTests, MemoryStoreConformanceTests,
+                                       SessionStoreConformanceTests, history)
 
 ENV = "LITTLE_HARNESS_TEST_POSTGRES_DSN"
 needs_driver = unittest.skipIf(postgres.psycopg is None, "install the postgres extra")
@@ -95,6 +96,44 @@ class PostgresSessionStoreTests(SchemaPerTest, SessionStoreConformanceTests, Tem
 
 
 @needs_database
+class PostgresMemoryTests(SchemaPerTest, MemoryStoreConformanceTests, TemporaryDirectoryTestCase):
+    memory_error = MemoryStoreError
+
+    def make_memory_store(self, name, *, quota=10000):
+        return PostgresMemoryStore(name, dsn_env=ENV, schema=self.schema, quota=quota)
+
+    def test_concurrent_adds_share_namespace_quota(self):
+        store = self.make_memory_store("quota", quota=1)
+        store.prepare()
+        barrier = threading.Barrier(2)
+        outcomes = []
+
+        def add(value):
+            barrier.wait(timeout=5)
+            try:
+                outcomes.append(self.make_memory_store("quota", quota=1).add(
+                    "n", value, kind="note", created_by="application"))
+            except MemoryStoreError:
+                outcomes.append(None)
+
+        threads = [threading.Thread(target=add, args=(value,)) for value in ("first", "second")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+            self.assertFalse(thread.is_alive())
+        self.assertEqual(len(outcomes), 2)
+        self.assertEqual(sum(value is not None for value in outcomes), 1)
+        self.assertEqual(len(store.list("n")), 1)
+
+    def test_unowned_tables_are_not_adopted(self):
+        self.sql("CREATE SCHEMA {schema}; CREATE TABLE {schema}.memories (unrelated text)")
+        with self.assertRaises(MemoryStoreError):
+            self.make_memory_store("unowned").list("n")
+        self.assertEqual(self.sql("SELECT count(*) FROM {schema}.memories")[0][0], 0)
+
+
+@needs_database
 class PostgresJournalTests(SchemaPerTest, JournalConformanceTests, TemporaryDirectoryTestCase):
     def make_journal(self, name):
         return PostgresJournal(name, dsn_env=ENV, schema=self.schema)
@@ -159,7 +198,10 @@ class PostgresJournalTests(SchemaPerTest, JournalConformanceTests, TemporaryDire
                                                               ENV: os.environ[ENV]})
 
         target = ("--dsn-env", ENV, "--schema", self.schema)
-        self.assertIn("is ready", command("init", *target).stdout)
+        initialized = command("init", *target)
+        self.assertEqual(initialized.returncode, 0, initialized.stderr)
+        self.assertIn("is ready", initialized.stdout)
+        PostgresMemoryStore("cli", dsn_env=ENV, schema=self.schema).ensure_schema(create=False)
         journal = self.make_journal("cli")
         journal.assert_ready()
         action = journal.begin("run-1", "call-1", "probe", True)

@@ -13,7 +13,7 @@ process owns conversation state, budgets, policy checks, approval and journal co
 Provider adapters translate a common message format. Tools run sequentially, normally
 inline; an optional disposable process makes a tool timeout enforceable. Sessions
 preserve conversation, traces aid diagnosis, events support embedding, and the
-optional SQLite journal blocks unsafe continuation after uncertain outcomes.
+optional PostgreSQL or MongoDB journal blocks unsafe continuation after uncertain outcomes.
 
 None of these mechanisms is an OS sandbox or exactly-once external transaction.
 
@@ -30,7 +30,7 @@ flowchart LR
     Agent --> Gates["Validate, policy, approval"] --> Exec["Inline tool / isolated worker"]
     Agent --> Budget["Shared ExecutionBudget"]
     Agent --> Session[("Session JSON")]; Agent --> Trace[("Trace JSONL")]
-    Gates --> Journal[("Optional SQLite journal")]; Agent --> Events["Optional RunEvent callback"]
+    Gates --> Journal[("Optional database journal")]; Agent --> Events["Optional RunEvent callback"]
 ````
 
 This overview compresses execution ordering; use the detailed source and sequence
@@ -47,7 +47,8 @@ view below for the journal commit-before-invocation requirement.
 | `harness/policy.py`: `ToolPolicy` | Explicit read-only declarations and argument predicates | Trusted, synchronous parent code; not authorization isolation |
 | `harness/tool_execution.py` | Callable descriptor, fresh worker, JSON protocol, timeout and cleanup | Module functions or JSON-bound partials; no closures/bound methods or parent-memory propagation |
 | `harness/session.py`: `SessionStore`, `SessionFile`, `validate_session`, session errors | The session store interface, shared validation, and the file store: atomic version 2 saves (full history plus compaction point); reads legacy lists | No agent state; durable fsync only when the agent has a journal; the file store assumes one writer |
-| `harness/journal.py`: `ActionJournal`, `ExecutionJournal` | The journal interface and its SQLite implementation: durable action metadata, recovery guard, inspect/resolve CLI | No arguments/outputs; no replay or rollback |
+| `harness/journal.py`: `ActionJournal` | The journal interface and shared recovery rules; database implementations live in `stores/` | No arguments/outputs; no replay or rollback |
+| `harness/memory.py`: `MemoryStore`, `memory_tools` | Scoped long-term memory interface and a registry of ordinary read/write tools; database implementations live in `stores/` | Application selects namespace; memory text is untrusted; no automatic prompt injection or extraction |
 | `harness/events.py`: `RunEvent` | Versioned, deeply immutable observation snapshots | Delivery/failure handling lives in `Agent._emit` |
 | `agents/teaching/` | Explicit config, tool/agent factories, arithmetic/files/retrieval tools, demos and CLI | Imports the public runtime; no configuration loading or workspace creation on import |
 | `agents/hotpotqa/` | Explicit config, restricted tools, per-agent accounting and sequential researcher/reviewer workflow | Composes plain runtime instances with public hooks; no legacy globals/private runtime overrides |
@@ -86,6 +87,8 @@ than continuing to later calls or steps.
 5. After budget rechecks, `_dispatch()` lets an enabled journal commit `started`, emits
    a tool-start observation, rechecks available budget, then `_invoke_tool()` executes
    inline or starts the isolated worker. Policies/approval never run in that worker.
+   Inline calls receive a scoped context containing the run ID and output limit, reset
+   immediately afterward; memory uses it for provenance and valid bounded JSON.
 6. A trustworthy tool outcome is committed to the journal when enabled. The loop
    retains its result before finish notifications/printing/tracing. Completed and
    remaining not-run results are preserved together on supported terminal stops.
@@ -120,7 +123,7 @@ credentials and network; `worker_env=` can replace a worker's environment variab
 | `ExecutionBudget` | Fresh counters/deadline for each task | Hard preemption or exact billing |
 | Session JSON | Optional atomic conversation snapshot; interactive CLI default | Automatic output replay or action reconciliation |
 | Trace JSONL | Append-only metadata by default; content explicitly opt-in; default `trace.jsonl` | Replay engine, secret-redacted log or authoritative action ledger |
-| SQLite journal | Optional durable run/action metadata across restarts | External exactly-once execution or cancellation |
+| Database journal | Optional durable run/action metadata across restarts | External exactly-once execution or cancellation |
 | Event callback | Synchronous ephemeral observations during a task | Durable queue, permission or complete delivery |
 
 A journal action begins at `started`, then records `completed`, `failed`, `timed_out`,
@@ -188,7 +191,7 @@ has no accuracy score. See [evaluation contract](../datasets/HOTPOTQA_BASELINE.m
   are normalized, but provider-specific reasoning state is not portable.
 - **Fresh process for timed tools:** allows enforced waiting bounds without killing
   threads inside the parent; requires importable functions and explicit JSON inputs.
-- **SQLite before effects:** reduces silent loss after crashes without inventing
+- **Journal before effects:** reduces silent loss after crashes without inventing
   exactly-once guarantees or unsafe automatic retries.
 - **Separate observations and authority:** callbacks serve applications; policy and
   approval control dispatch. Content minimization is opt-in-path-specific, not global.

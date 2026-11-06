@@ -10,9 +10,10 @@ from functools import partial
 from pathlib import Path
 
 from agents.teaching import TeachingConfig, create_agent, create_tools
-from harness import ExecutionJournal, ToolPolicy
+from harness import ToolPolicy
 from harness.tool_execution import run_isolated_tool
 from tests.helpers import Model, TemporaryDirectoryTestCase, call, usage_reply as reply
+from tests.storage_fakes import FakeJournal
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -50,7 +51,7 @@ class SeparationTests(TemporaryDirectoryTestCase):
             """)
         self.assertEqual(child.returncode, 0, child.stderr)
 
-    def test_copied_package_runs_tools_policies_events_journal_and_worker_alone(self):
+    def test_copied_package_runs_tools_policies_events_and_worker_alone(self):
         isolated = self.root / "distribution"
         shutil.copytree(REPO / "harness", isolated / "harness", ignore=shutil.ignore_patterns("__pycache__"))
         (isolated / "custom_tools.py").write_text(
@@ -79,12 +80,12 @@ class SeparationTests(TemporaryDirectoryTestCase):
             events = []
             agent = harness.Agent(lambda *a, **k: next(responses), 'custom', tools=tools,
                 quiet=True, tool_timeout_seconds=3, on_event=events.append,
-                journal_path='actions.sqlite', tool_policy=harness.ToolPolicy(read_only=True))
+                tool_policy=harness.ToolPolicy(read_only=True))
             result = agent.run_result('go')
             assert result.status == 'completed' and result.usage.tool_errors == 0
             assert agent.messages[2]['content'][0]['content'] == 'standalone:ok'
             assert events[-1].kind == 'run_finished'
-            assert harness.ExecutionJournal('actions.sqlite').inspect()[0]['status'] == 'completed'
+            assert agent.journal is None
             assert 'agents' not in sys.modules and 'mini_harness' not in sys.modules
             """, isolated)
         self.assertEqual(child.returncode, 0, child.stderr)
@@ -123,7 +124,7 @@ class SeparationTests(TemporaryDirectoryTestCase):
                               call("read_file", context={}, path="note.txt"), reply("done"))
                 agent = create_agent(model, config, quiet=True, approve=lambda *_: True,
                                      trace_path=base / "trace.jsonl", tool_timeout_seconds=timeout,
-                                     journal_path=base / "actions.sqlite")
+                                     journal=FakeJournal())
                 agents.append((agent, config, label))
         # Construct all applications first, then interleave their work; no last-config-wins state.
         for agent, config, label in reversed(agents):
@@ -137,16 +138,15 @@ class SeparationTests(TemporaryDirectoryTestCase):
             expected = "escapes workspace" if agent.tool_timeout_seconds is None else "tool execution failed"
             self.assertIn(expected, agent.messages[8]["content"][0]["content"])
             self.assertIn("unexpected argument", agent.messages[10]["content"][0]["content"])
-            self.assertEqual(len(ExecutionJournal(config.workspace.parent / "actions.sqlite").inspect()), 4)
+            self.assertEqual(len(agent.journal.inspect()), 4)
 
     def test_factory_declares_writable_root_and_enforces_policy(self):
         config = TeachingConfig(self.root / "workspace", self.root / "knowledge")
-        with self.assertRaisesRegex(ValueError, "outside"):
-            create_agent(Model(), config, journal_path=config.workspace / "actions.sqlite")
         agent = create_agent(Model(call("write_file", path="blocked.txt", content="no"), reply("done")),
                              config, quiet=True, trace_path=self.root / "trace.jsonl",
                              tool_policy=ToolPolicy(read_only=True))
         self.assertEqual(agent.run_result("go").usage.tool_errors, 1)
+        self.assertEqual(agent.writable_roots, (config.workspace,))
         self.assertFalse((config.workspace / "blocked.txt").exists())
 
     def test_partial_worker_rejects_non_json_configuration_and_non_importable_functions(self):
@@ -161,14 +161,13 @@ class SeparationTests(TemporaryDirectoryTestCase):
                 spawn.assert_not_called()
         local.assert_not_called()
 
-    def test_package_recovery_command(self):
-        journal = self.root / "actions.sqlite"
-        ExecutionJournal(journal).prepare()
-        child = subprocess.run([sys.executable, "-m", "harness", "inspect", str(journal)],
+    def test_package_recovery_command_directs_users_to_database_backend(self):
+        child = subprocess.run([sys.executable, "-m", "harness"],
                                cwd=self.root, env={"PATH": os.defpath, "PYTHONPATH": str(REPO)},
                                capture_output=True, text=True, timeout=10)
-        self.assertEqual(child.returncode, 0, child.stderr)
-        self.assertEqual(json.loads(child.stdout), [])
+        self.assertNotEqual(child.returncode, 0)
+        self.assertIn("stores.postgres", child.stderr)
+        self.assertIn("stores.mongodb", child.stderr)
         self.assertNotIn("RuntimeWarning", child.stderr)
 
     def test_new_cli_respects_dotenv_and_shell_precedence_with_timed_tools(self):

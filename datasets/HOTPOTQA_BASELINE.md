@@ -106,7 +106,7 @@ harness CLI. References from before this runtime addition require a fresh pair.
 HotpotQA workers do not inherit `HARNESS_TOOL_TIMEOUT_SECONDS` and keep their
 in-memory tools inline. References predating this module need a fresh paired run.
 
-`harness/journal.py` is fingerprinted too. The optional `HARNESS_JOURNAL` setting
+`harness/journal.py` is fingerprinted too. The optional journal backend settings
 applies only to the general harness CLI, not evaluation workers. Journal metadata
 does not change evaluation artifact formats; older references require a fresh pair.
 

@@ -4,6 +4,7 @@ import argparse
 import re
 
 from harness.journal import JournalError, run_recovery_command
+from harness.memory import MemoryStoreError
 from harness.session import SessionStoreError
 
 IDENTIFIER = re.compile(r"[A-Za-z0-9._:-]{1,200}")
@@ -16,7 +17,7 @@ def check_id(name):
 
 
 def storage_main(argv, *, description, backend, env_option, location_option, default_location,
-                 session_store, journal):
+                 session_store, journal, memory_store):
     """init, journal inspect and journal resolve; connection settings only by variable name."""
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(env_option, dest="env", required=True,
@@ -26,7 +27,7 @@ def storage_main(argv, *, description, backend, env_option, location_option, def
     journal_id.add_argument("--journal-id", required=True)
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     areas = parser.add_subparsers(dest="area", required=True)
-    areas.add_parser("init", parents=[common], help="create or check the session and journal storage")
+    areas.add_parser("init", parents=[common], help="create or check session, journal and memory storage")
     commands = areas.add_parser("journal", help="inspect or resolve journal records; never runs an action") \
         .add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", parents=[common, journal_id], help="read-only metadata")
@@ -39,11 +40,11 @@ def storage_main(argv, *, description, backend, env_option, location_option, def
     args = parser.parse_args(argv)
     try:
         if args.area == "init":
-            for storage in (session_store, journal):
+            for storage in (session_store, journal, memory_store):
                 storage("init", args.env, args.location).ensure_schema()
-            print(f"{backend} storage {args.location} is ready for sessions and journals.")
+            print(f"{backend} storage {args.location} is ready for sessions, journals and memory.")
         else:
             run_recovery_command(journal(args.journal_id, args.env, args.location), args)
-    except (JournalError, SessionStoreError, ValueError, TypeError, ImportError):
+    except (JournalError, MemoryStoreError, SessionStoreError, ValueError, TypeError, ImportError):
         parser.exit(1, f"{backend} storage operation failed; check the variable name, location, journal ID "
                        "and recovery options.\n")

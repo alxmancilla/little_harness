@@ -1,4 +1,4 @@
-"""Package command for offline journal inspection and human recovery."""
+"""Direct journal recovery users to the database backend commands."""
 
 from .journal import main
 

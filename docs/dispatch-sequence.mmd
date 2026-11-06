@@ -6,7 +6,7 @@ sequenceDiagram
     participant Model as Model callable
     participant Policy as ToolPolicy - optional
     participant Approval as Approval callback
-    participant Journal as SQLite journal - optional
+    participant Journal as PostgreSQL or MongoDB journal - optional
     participant Tool as Inline function or isolated worker
     participant Session as Session JSON - optional
 

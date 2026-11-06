@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from .journal import ActionJournal, ExecutionJournal, JournalError
+from .journal import ActionJournal, JournalError
 from .events import RunEvent
 from .runtime import BudgetExceeded, ExecutionBudget, RunLimits, RunResult
 from .model_clients import ModelError
+from .memory import _tool_context
 from .tool_execution import (ToolExecutionStopped, ToolOutcome, run_isolated_tool, validate_tool_timeout,
                              validate_worker_env)
 from .policy import PolicyDecision, ToolPolicy
@@ -131,13 +132,13 @@ class Agent:
     text is added to that user turn before the next model call. It cannot authorize tools.
     worker_env, when set, is the complete environment of timed-tool workers instead of a
     copy of os.environ. Inline tools still see the parent environment. It is not a sandbox.
-    session_store and journal accept any SessionStore or ActionJournal, in place of
-    session_path and journal_path respectively.
+    session_store and journal accept any SessionStore or ActionJournal; session_store
+    is an alternative to session_path.
     """
 
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
                  compact_at=40000, session_path=None, *, tools, limits=None, tool_timeout_seconds=None,
-                 journal_path=None, on_event=None, event_include_content=False, quiet=False, tool_policy=None,
+                 on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
                  trace_include_content=False, compact_at_tokens=None, get_steering=None, worker_env=None,
                  session_store=None, journal=None):
@@ -147,7 +148,7 @@ class Agent:
         self._configure_tools(tools, tool_policy, tool_admission, approve,
                               max_tool_output, tool_timeout_seconds, writable_roots, worker_env)
         self._configure_context(compact_at, compact_at_tokens, session_path, session_store)
-        self._configure_controls(limits, get_steering, journal_path, journal)
+        self._configure_controls(limits, get_steering, journal)
         # Per-run state, reset by run_result().
         self._budget = None
         self._event_run_id, self._event_step, self._event_sequence = None, None, 0
@@ -211,28 +212,17 @@ class Agent:
         # The model sees the summary, then history from _context_start; history itself is never shortened.
         self._context_start, self._context_summary = 0, None
 
-    def _configure_controls(self, limits, get_steering, journal_path, journal):
+    def _configure_controls(self, limits, get_steering, journal):
         """Per-task budgets, optional steering and the crash-recovery journal, opened last."""
         if limits is not None and not isinstance(limits, RunLimits):
             raise TypeError("limits must be RunLimits or None")
         if get_steering is not None and not callable(get_steering):
             raise TypeError("get_steering must be callable or None")
-        if journal is not None and (journal_path is not None or not isinstance(journal, ActionJournal)):
-            raise TypeError("journal must be an ActionJournal, and not combined with journal_path")
+        if journal is not None and not isinstance(journal, ActionJournal):
+            raise TypeError("journal must be an ActionJournal")
         self.get_steering = get_steering
         self.limits = limits if limits is not None else RunLimits()
-        self.journal = ExecutionJournal(journal_path) if journal_path is not None else journal
-        # Path separation applies only to the SQLite file journal.
-        if not isinstance(self.journal, ExecutionJournal):
-            return
-        reserved = {self.trace_path.resolve()}
-        if isinstance(self._session, SessionFile):
-            reserved.update((self._session.path.resolve(), self._session.tmp_path.resolve()))
-        journal_files = {Path(str(self.journal.path) + suffix)
-                         for suffix in ("", "-journal", "-wal", "-shm")}
-        if (any(path.is_relative_to(root) for path in journal_files for root in self.writable_roots)
-                or journal_files & reserved):
-            raise ValueError("journal must be outside the writable workspace and separate from trace/session files")
+        self.journal = journal
 
     def _print(self, *args, **kwargs):
         if not self.quiet:
@@ -537,7 +527,11 @@ class Agent:
                        action_id=action_id, content={"input": args})
             if self._budget is not None and self.on_event is not None:
                 self._budget.check("work")
-            outcome, stop_reason = self._invoke_tool(entry, args, timeout)
+            token = _tool_context.set((self._event_run_id, self.max_tool_output))
+            try:
+                outcome, stop_reason = self._invoke_tool(entry, args, timeout)
+            finally:
+                _tool_context.reset(token)
         except BaseException as error:
             if action_id is not None:
                 try:

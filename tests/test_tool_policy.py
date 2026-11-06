@@ -11,6 +11,7 @@ from unittest import mock
 from harness import ToolPolicy
 from tests import helpers as f
 from tests import tool_fixtures
+from tests.storage_fakes import FakeJournal as fake_journal
 
 from harness import agent as h
 
@@ -54,7 +55,7 @@ class PolicyTests(f.HarnessTestCase):
         tools["write_file"] = dict(tools["write_file"], fn=execute)
         tools["http_get"] = dict(tools["http_get"], fn=execute)
         agent = self.agent(model, tools=tools, tool_policy=ToolPolicy(read_only=True), approve=approve,
-                           journal_path=self.dir / "journal.sqlite3", tool_timeout_seconds=3)
+                           journal=fake_journal(), tool_timeout_seconds=3)
         with mock.patch.object(h, "run_isolated_tool", return_value=h.ToolOutcome("completed", "4", False)) as worker:
             result = agent.run_result("go")
         self.assertEqual(result.status, "completed")
@@ -121,7 +122,7 @@ class PolicyTests(f.HarnessTestCase):
         agent = self.agent([f.tool_calls(("invalid", "write_file", {}),
                                         ("valid", "write_file", {"path": "note", "content": "data"})),
                             f.reply("done")], tool_policy=policy, approve=approve,
-                           journal_path=self.dir / "journal.sqlite3")
+                           journal=fake_journal())
         begin = agent.journal.begin
 
         def record(*args):
@@ -150,7 +151,7 @@ class PolicyTests(f.HarnessTestCase):
         model = f.RecordingModel(f.tool_calls(("a", "write_file", {"path": "note", "content": "data"}),
                                               ("b", "current_time", {})), f.reply("must not call"))
         agent = self.agent(model, tool_policy=ToolPolicy(argument_checks={"write_file": check}),
-                           approve=approve, journal_path=self.dir / "journal.sqlite3",
+                           approve=approve, journal=fake_journal(),
                            session_path=self.dir / "session.json", event_include_content=True)
         with mock.patch.dict(self.tools["write_file"], {"fn": execute}), \
                 mock.patch.object(h, "run_isolated_tool") as worker:
@@ -225,7 +226,7 @@ class PolicyTests(f.HarnessTestCase):
         model = f.RecordingModel(f.tool_calls(("done", "calculator", {"expression": "2+2"}),
                                               ("bad", "current_time", {}), ("later", "current_time", {})))
         agent = self.agent(model, tool_policy=ToolPolicy(argument_checks={"current_time": check}),
-                           journal_path=self.dir / "journal.sqlite3", session_path=self.dir / "session.json")
+                           journal=fake_journal(), session_path=self.dir / "session.json")
         result = agent.run_result("go")
         self.assertEqual(result.stop_reason, "tool_policy_error")
         saved = f.saved_messages(agent.session_path)[-1]["content"]
@@ -246,7 +247,7 @@ class PolicyTests(f.HarnessTestCase):
         execute = mock.Mock()
         agent = self.agent([f.tool_calls(("a", "write_file", {"path": "note", "content": "data"}))],
                            tool_policy=ToolPolicy(argument_checks={"write_file": check}), approve=approve,
-                           limits=h.RunLimits(max_seconds=1), journal_path=self.dir / "journal.sqlite3")
+                           limits=h.RunLimits(max_seconds=1), journal=fake_journal())
         with mock.patch("harness.runtime.time.monotonic", side_effect=lambda: now[0]), \
                 mock.patch.dict(self.tools["write_file"], {"fn": execute}):
             result = agent.run_result("go")
@@ -325,7 +326,7 @@ class PolicyTests(f.HarnessTestCase):
                                                       ("b", "current_time", {})))
                 agent = self.agent(model, on_event=observe, approve=approve,
                                    tool_policy=ToolPolicy(argument_checks={"write_file": check}),
-                                   journal_path=self.dir / f"interrupt-{interrupt_in_observer}.sqlite3",
+                                   journal=fake_journal(),
                                    session_path=self.dir / "session.json")
                 with mock.patch.object(h, "run_isolated_tool") as worker, \
                         mock.patch.dict(self.tools["write_file"], {"fn": mock.Mock()}) as entry:
@@ -345,7 +346,7 @@ class PolicyTests(f.HarnessTestCase):
         check = mock.Mock(return_value=True)
         model = f.RecordingModel(f.tool_calls(("a", "current_time", {})))
         agent = self.agent(model, tool_policy=ToolPolicy(argument_checks={"current_time": check}),
-                           journal_path=self.dir / "journal.sqlite3")
+                           journal=fake_journal())
         agent.journal.prepare()
         agent.journal.begin("unclosed", "old", "current_time", False)
         result = agent.run_result("go")
@@ -372,7 +373,7 @@ class PolicyTests(f.HarnessTestCase):
         batch = f.tool_calls(("a", "current_time", {}))
         agent = self.agent([batch, batch, f.reply("done")],
                            tool_policy=ToolPolicy(argument_checks={"current_time": check}),
-                           journal_path=self.dir / "journal.sqlite3")
+                           journal=fake_journal())
         execute = mock.Mock(return_value="ok")
         with mock.patch.dict(self.tools["current_time"], {"fn": execute}):
             first = agent.run_result("go")

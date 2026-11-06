@@ -16,11 +16,12 @@ from datetime import datetime, timezone
 from unittest import mock
 from uuid import uuid4
 
-from harness import Agent, JournalError, JournalRecoveryRequired, SessionStoreError
+from harness import Agent, JournalError, JournalRecoveryRequired, MemoryStoreError, SessionStoreError
 from stores import mongodb
-from stores.mongodb import MongoJournal, MongoSessionStore
+from stores.mongodb import MongoJournal, MongoMemoryStore, MongoSessionStore
 from tests.helpers import REPO, RecordingModel, TemporaryDirectoryTestCase, reply
-from tests.storage_conformance import JournalConformanceTests, SessionStoreConformanceTests, history
+from tests.storage_conformance import (JournalConformanceTests, MemoryStoreConformanceTests,
+                                       SessionStoreConformanceTests, history)
 
 ENV = "LITTLE_HARNESS_TEST_MONGODB_URI"
 needs_driver = unittest.skipIf(mongodb.pymongo is None, "install the mongodb extra")
@@ -59,12 +60,14 @@ class MongoSessionStoreTests(DatabasePerTest, SessionStoreConformanceTests, Temp
     def test_process_killed_during_a_save_leaves_the_previous_revision_and_fails_closed(self):
         self.make_store("crash").save(history("one", "two"), None, durable=True)
         child = self.run_child("""
+            from bson.json_util import dumps
             from stores.mongodb import MongoSessionStore
             store = MongoSessionStore("crash", uri_env=ENV, database=DATABASE)
             store.load()
             original = pymongo.collection.Collection.insert_many
             def insert_then_die(self, *args, **kwargs):
                 original(self, *args, **kwargs)
+                print(dumps(kwargs["session"].session_id), flush=True)
                 os._exit(3)  # Documents were deleted and inserted, but the transaction never committed.
             pymongo.collection.Collection.insert_many = insert_then_die
             store.save([{"role": "user", "content": "one"}, {"role": "assistant", "content": "CHANGED"},
@@ -77,7 +80,8 @@ class MongoSessionStoreTests(DatabasePerTest, SessionStoreConformanceTests, Temp
         # (up to transactionLifetimeLimitSeconds, 60 by default) and keeps its writes: saves are refused.
         with self.assertRaises(SessionStoreError):
             store.save(history("one", "two", "three"), None, durable=True)
-        self.client.admin.command("killAllSessions", [])  # The operator's way to end it early.
+        from bson.json_util import loads
+        self.client.admin.command("killSessions", [loads(child.stdout)])  # End only the crashed session.
         store.save(history("one", "two", "three"), None, durable=True)
         self.assertEqual(self.make_store("crash").load()[0], history("one", "two", "three"))
 
@@ -92,6 +96,49 @@ class MongoSessionStoreTests(DatabasePerTest, SessionStoreConformanceTests, Temp
         self.assertEqual(sorted(after), [0, 1, 2, 3])
         with self.assertRaises(mongodb.PyMongoError):
             self.db.lh_sessions.insert_one({"_id": "malformed", "message_count": "many"})
+
+
+@needs_database
+class MongoMemoryTests(DatabasePerTest, MemoryStoreConformanceTests, TemporaryDirectoryTestCase):
+    memory_error = MemoryStoreError
+
+    def make_memory_store(self, name, *, quota=10000):
+        return MongoMemoryStore(name, client=self.client, database=self.database, quota=quota)
+
+    def test_concurrent_adds_share_namespace_quota(self):
+        stores = [self.make_memory_store("quota", quota=1) for _ in range(2)]
+        for store in stores:
+            store.prepare()
+        barrier = threading.Barrier(2)
+        outcomes = []
+
+        def add(store):
+            barrier.wait(timeout=5)
+            try:
+                outcomes.append(store.add("n", "value", kind="note", created_by="application"))
+            except MemoryStoreError:
+                outcomes.append(None)
+
+        threads = [threading.Thread(target=add, args=(store,)) for store in stores]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+            self.assertFalse(thread.is_alive())
+        self.assertEqual(len(outcomes), 2)
+        self.assertEqual(sum(value is not None for value in outcomes), 1)
+        self.assertEqual(len(stores[0].list("n")), 1)
+
+    def test_unowned_collections_are_not_adopted_and_validator_applies(self):
+        self.db.lh_memories.insert_one({"unrelated": True})
+        with self.assertRaises(MemoryStoreError):
+            self.make_memory_store("unowned").list("n")
+        self.assertEqual(self.db.lh_memories.count_documents({}), 1)
+
+    def test_validator_rejects_malformed_memories(self):
+        self.make_memory_store("valid").prepare()
+        with self.assertRaises(mongodb.PyMongoError):
+            self.db.lh_memories.insert_one({"text": "missing required fields"})
 
 
 @needs_database
@@ -162,7 +209,10 @@ class MongoJournalTests(DatabasePerTest, JournalConformanceTests, TemporaryDirec
                                                               ENV: os.environ[ENV]})
 
         target = ("--uri-env", ENV, "--database", self.database)
-        self.assertIn("is ready", command("init", *target).stdout)
+        initialized = command("init", *target)
+        self.assertEqual(initialized.returncode, 0, initialized.stderr)
+        self.assertIn("is ready", initialized.stdout)
+        MongoMemoryStore("cli", uri_env=ENV, database=self.database).ensure_schema(create=False)
         journal = self.make_journal("cli")
         journal.assert_ready()
         action = journal.begin("run-1", "call-1", "probe", True)

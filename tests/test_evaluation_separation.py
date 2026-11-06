@@ -147,12 +147,12 @@ class IndependentExampleTests(TemporaryDirectoryTestCase):
             events = []
             agent = create_agent(OfflineModel(), {'CUSTOM': 19}, quiet=True, on_event=events.append,
                 tool_policy=ToolPolicy(read_only=True), tool_timeout_seconds=3,
-                journal_path='actions.sqlite', limits=RunLimits(max_model_calls=2, max_tool_calls=1))
+                limits=RunLimits(max_model_calls=2, max_tool_calls=1))
             result = agent.run_result('CUSTOM')
             assert result.status == 'completed' and result.answer == 'CUSTOM: 19 in stock.'
             assert result.usage.tool_errors == 0 and result.usage.model_calls == 2
             assert events[-1].kind == 'run_finished'
-            assert agent.journal.inspect()[0]['status'] == 'completed'
+            assert agent.journal is None
             assert 'EXAMPLE_SENTINEL' not in os.environ
             assert 'mini_harness' not in sys.modules and 'agents' not in sys.modules
             assert not Path('workspace').exists()

@@ -1,11 +1,12 @@
-"""Shared contracts for every session store and action journal (docs/STORAGE_SPEC.md, ST-08).
+"""Shared storage contracts (docs/STORAGE_SPEC.md, ST-08).
 
 Mix a suite into a TestCase that provides self.root (a temporary directory) and the
 backend hooks below. Each hook call with the same name returns a new handle to the
-same stored session or journal; a new name is empty.
+same storage; a new name is empty.
 """
 
 import json
+from datetime import datetime, timezone
 
 from harness import (Agent, JournalError, JournalRecoveryRequired, SessionConflictError, SessionLoadError,
                      SessionStore, ToolRegistry)
@@ -174,3 +175,86 @@ class JournalConformanceTests:
         [record] = self.make_journal("agent").inspect()
         self.assertEqual((record["tool_name"], record["status"], record["run_closed"]), ("probe", "completed", True))
         self.assertNotIn("probed", json.dumps(record))
+
+
+class MemoryStoreConformanceTests:
+    """Hooks: make_memory_store(name, *, quota=10000), memory_error exception type.
+
+    The same name opens the same backing store; a new name starts empty. The
+    fixture supplies the shared MemoryStoreError exception type.
+    """
+
+    def make_memory_store(self, name, *, quota=10000):
+        raise NotImplementedError
+
+    def test_memory_round_trips_with_provenance_across_handles(self):
+        store = self.make_memory_store("round-trip")
+        memory_id = store.add("tenant:1/user:7", "Snowman ☃; $where and a.b", kind="note",
+                              created_by="model", run_id="run-1")
+        [record] = self.make_memory_store("round-trip").list("tenant:1/user:7")
+        self.assertIsInstance(memory_id, str)
+        self.assertTrue(memory_id)
+        self.assertEqual((record.memory_id, record.namespace, record.text, record.kind,
+                          record.created_by, record.run_id),
+                         (memory_id, "tenant:1/user:7", "Snowman ☃; $where and a.b", "note", "model", "run-1"))
+        self.assertEqual(datetime.fromisoformat(record.created_at.replace("Z", "+00:00")).utcoffset(),
+                         timezone.utc.utcoffset(None))
+
+    def test_search_delete_and_purge_are_isolated_by_namespace(self):
+        store = self.make_memory_store("scope")
+        first = store.add("tenant:1", "shared telescope", kind="fact", created_by="application")
+        second = store.add("tenant:2", "shared telescope", kind="fact", created_by="application")
+        self.assertNotEqual(first, second)
+        self.assertEqual([record.memory_id for record in store.search("tenant:1", "telescope")], [first])
+        self.assertFalse(store.delete("tenant:1", second))
+        self.assertEqual(store.purge("tenant:1"), 1)
+        self.assertEqual(store.list("tenant:1"), [])
+        self.assertEqual([record.memory_id for record in store.list("tenant:2")], [second])
+        self.assertEqual(store.purge("tenant:1"), 0)
+
+    def test_search_matches_whole_words_case_insensitively_and_obeys_limit(self):
+        store = self.make_memory_store("search")
+        first = store.add("n", "Blue telescope", kind="fact", created_by="application")
+        second = store.add("n", "Red telescope", kind="note", created_by="application")
+        store.add("n", "telescopes are different", kind="preference", created_by="application")
+        store.add("n", "Unrelated astronomy", kind="note", created_by="application")
+        self.assertEqual({record.memory_id for record in store.search("n", "TELESCOPE")}, {first, second})
+        self.assertEqual(len(store.search("n", "telescope", limit=1)), 1)
+        self.assertEqual(store.search("n", "missing"), [])
+
+    def test_quota_is_per_namespace_and_rejection_does_not_evict(self):
+        store = self.make_memory_store("quota", quota=2)
+        first = store.add("a", "first", kind="fact", created_by="application")
+        second = store.add("a", "second", kind="note", created_by="application")
+        with self.assertRaises(self.memory_error):
+            store.add("a", "third", kind="fact", created_by="application")
+        other = store.add("b", "other", kind="fact", created_by="application")
+        self.assertEqual({record.memory_id for record in store.list("a")}, {first, second})
+        self.assertEqual([record.memory_id for record in store.list("b")], [other])
+        self.assertTrue(store.delete("a", first))
+        self.assertFalse(store.delete("a", first))
+        store.add("a", "replacement", kind="fact", created_by="application")
+        self.assertEqual(len(store.list("a")), 2)
+
+    def test_search_ranks_exact_two_word_match_above_one_word_match(self):
+        store = self.make_memory_store("ranking")
+        store.add("n", "telescope", kind="fact", created_by="application")
+        better = store.add("n", "blue telescope", kind="fact", created_by="application")
+        self.assertEqual(store.search("n", "blue telescope")[0].memory_id, better)
+
+    def test_length_and_limit_boundaries(self):
+        store = self.make_memory_store("bounds")
+        for text in ("", "x" * 2001):
+            with self.subTest(text_length=len(text)), self.assertRaises(ValueError):
+                store.add("n", text, kind="fact", created_by="application")
+        store.add("n", "x" * 2000, kind="fact", created_by="application")
+        for query in ("", "x" * 501):
+            with self.subTest(query_length=len(query)), self.assertRaises(ValueError):
+                store.search("n", query)
+        store.search("n", "x" * 500)
+        for limit in (0, 21, True):
+            with self.subTest(search_limit=limit), self.assertRaises(ValueError):
+                store.search("n", "x", limit=limit)
+        for limit in (0, 1001, True):
+            with self.subTest(list_limit=limit), self.assertRaises(ValueError):
+                store.list("n", limit=limit)

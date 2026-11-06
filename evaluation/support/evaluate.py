@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from examples import support_agent as app
-from harness import ModelConfigError, RunLimits, make_model
+from harness import MemoryRecord, ModelConfigError, RunLimits, make_model
+from harness.memory import _WORDS, _rank
 
 from .dataset import load_cases
 from .report import markdown_report, review_template
@@ -34,26 +35,66 @@ def model_fingerprint(model):
 def skipped_result(case, status="not_run"):
     return {"id": case["id"], "status": status, "execution_status": status,
             "stop_reason": status, "answer": None, "recommendation": None,
-            "checks": {"valid_output": False, "escalation_matches_draft": False, "required_sources_cited": False},
+            "checks": {"valid_output": False, "escalation_matches_draft": False, "required_sources_cited": False,
+                       "memory_exposed": False},
             "usage": {key: 0 for key in ("model_calls", "tool_calls_requested", "tool_calls_attempted",
                                         "tool_errors", "input_tokens", "output_tokens")},
             "elapsed_seconds": 0, "tools_requested": [], "model_config_sha256": None}
 
 
+class _CaseMemory:
+    """Read-only, ephemeral evidence fixture; never persists or shares data across cases."""
+
+    def __init__(self, memories):
+        self.records = [MemoryRecord(str(index), "evaluation", text, "note", "application",
+                                     "2000-01-01T00:00:00+00:00", None)
+                        for index, text in enumerate(memories)]
+
+    def search(self, namespace, query, *, limit=5):
+        return _rank(self.records if namespace == "evaluation" else [], set(_WORDS.findall(query.lower())), limit)
+
+    def list(self, namespace, *, limit=100):
+        return self.records[:limit] if namespace == "evaluation" else []
+
+    def add(self, namespace, text, *, kind, created_by, run_id=None):
+        raise ValueError("evaluation memory is read-only")
+
+    def delete(self, namespace, memory_id):
+        raise ValueError("evaluation memory is read-only")
+
+    def purge(self, namespace):
+        raise ValueError("evaluation memory is read-only")
+
+
 def evaluate_case(case, model, evidence, output, limits):
     """Only the input is shown to a fresh agent; expectations never enter the prompt or tools.
 
-    A case's extra_documents are searchable for that case only, as untrusted evidence.
+    Case-specific documents and memories are untrusted evidence, not expectations.
     """
     output.mkdir()
     documents = {**evidence["documents"], **case.get("extra_documents", {})}
+    memories = case.get("extra_memories", [])
+    memory_options = {}
+    if memories:
+        memory_options = {"memory_store": _CaseMemory(memories), "memory_namespace": "evaluation",
+                          "memory_allow_write": False}
     agent = app.create_agent(model, documents, evidence["products"], trace_path=output / "trace.jsonl",
-                             limits=limits, trace_include_content=False)
+                             limits=limits, trace_include_content=False, **memory_options)
     result = agent.run_result(json.dumps(case["input"]))
     value, checks = score_result(result, agent.messages, case)
     requested = [block["name"] for message in agent.messages
                  if message["role"] == "assistant" and isinstance(message["content"], list)
                  for block in message["content"] if block["type"] == "tool_use"]
+    recall_ids = {block["id"] for message in agent.messages if message["role"] == "assistant"
+                  and isinstance(message["content"], list) for block in message["content"]
+                  if block["type"] == "tool_use" and block["name"] == "recall"}
+    recalled = set()
+    for message in agent.messages:
+        if message["role"] == "user" and isinstance(message["content"], list):
+            for block in message["content"]:
+                if block["type"] == "tool_result" and block["tool_use_id"] in recall_ids and not block.get("is_error"):
+                    recalled.update(item["text"] for item in json.loads(block["content"])["memories"])
+    checks["memory_exposed"] = set(memories) <= recalled
     return {"id": case["id"], "status": "invalid_output" if result.status == "completed" and value is None
             else result.status, "execution_status": result.status, "stop_reason": result.stop_reason,
             "answer": result.answer, "recommendation": value, "checks": checks,
