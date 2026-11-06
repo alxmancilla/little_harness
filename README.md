@@ -18,7 +18,7 @@ tool and diagnosing a failed call. Finish with a two-tool application capstone
 where you own the registry, data, policies and budgets. Each lab includes an
 exercise, checks, hints and a separate reference solution.
 
-Use **Python 3.9+**. Download or clone the repository, open its folder in your
+Use **Python 3.11+**. Download or clone the repository, open its folder in your
 editor and open a terminal there. Follow the [setup checklist](LEARN.md#before-you-start)
 if you are new to running Python projects. Nothing needs to be installed with `pip`.
 
@@ -53,7 +53,7 @@ then add your own test. Earlier exercise files are separate and stay untouched.
 
 ## Quick start
 
-Use **Python 3.9+** and run commands from the repository root. A virtual environment
+Use **Python 3.11+** and run commands from the repository root. A virtual environment
 is optional; there is nothing to install with `pip`.
 
 ````sh
@@ -249,7 +249,7 @@ python3 -m unittest -q
 ````
 
 Focused suites and installed-data checks are listed in the [test reference](docs/REFERENCE.md#tests).
-GitHub Actions runs the same command on Python 3.9 through 3.14 for every push to
+GitHub Actions runs the same command on Python 3.11 through 3.14 for every push to
 `main` and every pull request ([workflow](.github/workflows/tests.yml)).
 
 ## Further reading

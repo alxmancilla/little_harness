@@ -28,7 +28,7 @@ def build_wheel(output):
     files[DIST_INFO + "/METADATA"] = (
         f"Metadata-Version: 2.1\nName: little-harness\nVersion: {VERSION}\n"
         "Summary: A minimal standard-library agent runtime with explicit controls\n"
-        "Requires-Python: >=3.9\n\n"
+        "Requires-Python: >=3.11\n\n"
     ).encode("utf-8")
     files[DIST_INFO + "/WHEEL"] = (
         "Wheel-Version: 1.0\nGenerator: little-harness-stdlib\n"

@@ -14,7 +14,7 @@ No machine-learning background is required.
 2. Check that this folder contains `README.md`, `LEARN.md`, `harness/` and `lessons/`.
    This is the **repository root**; do not open only the `lessons/` subfolder.
 3. Open a terminal in that folder. In VS Code, use **Terminal → New Terminal**.
-4. Run the version check below. Use Python **3.9+**. On Windows, replace `python3`
+4. Run the version check below. Use Python **3.11+**. On Windows, replace `python3`
    with `python` or `py -3` if that is your Python launcher.
 
 ````sh
@@ -159,7 +159,7 @@ passing its supplied checks is not the whole assignment.
 
 | What you see | What to do |
 | --- | --- |
-| `python3` not found | Install Python 3.9+ or use an existing `python` / Windows `py -3` launcher. Check its version before continuing. |
+| `python3` not found | Install Python 3.11+ or use an existing `python` / Windows `py -3` launcher. Check its version before continuing. |
 | `No module named lessons` | Open a terminal in the folder containing `README.md` and `lessons/`, not inside `lessons/`. Run `python3 -m lessons.preview`, not a `.py` file directly. |
 | `SyntaxError` or `IndentationError` after editing | Check the edited function's syntax and indentation. Save the file before rerunning; a syntax error must be fixed before the checker can load it. |
 | Preview works, but a checkpoint fails | Your setup is working. Read the named checkpoint and hint; edit only the relevant function. Do not add credentials or change `.env`. |

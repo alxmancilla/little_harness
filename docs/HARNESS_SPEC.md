@@ -1,7 +1,7 @@
 # Little Harness specification
 
 **Status:** as-built specification, revision 5 (separation Phase 4 complete). Describes the current implementation,
-not a promise of unimplemented features. **Runtime:** Python 3.9+, standard library only.
+not a promise of unimplemented features. **Runtime:** Python 3.11+, standard library only.
 
 This document uses specification-driven structure: scope, contracts, numbered
 requirements, invariants and acceptance scenarios. **MUST** denotes a required
