@@ -267,17 +267,21 @@ Each scenario runs against every backend through the conformance suites (ST-08).
 | SAC-12 / ST-05 | A stored memory contains an injected instruction | `recall` returns it inside `{"untrusted": true, …}`; traces hold no memory text by default |
 | SAC-13 / ST-07 | Database unreachable or credentials wrong | Fixed error message without host, user or query text, within the time bound |
 
-## 7. Open decisions
+## 7. Decisions
 
-These are settled in Phase 0 of the [plan](STORAGE_PLAN.md) and recorded here.
+Settled in Phase 0 of the [plan](STORAGE_PLAN.md):
 
-1. **Dependency declaration.** `stores/requirements-postgres.txt` and
-   `stores/requirements-mongodb.txt`, or a `pyproject.toml` with optional extras.
-   Proposed bounds: `psycopg[binary]>=3.3,<4` and `pymongo>=4.19,<5`.
-2. **Package name.** `stores/` inside this repository (proposed), or a separately
-   published package.
-3. **Memory quota and text limits.** Defaults in ST-04 are proposals.
-4. **Atlas.** MongoDB Atlas Search and Vector Search could serve a later vector
-   revision; revision 1 uses only the server's own text index, so it runs on a local
-   replica set.
+1. **Dependency declaration:** `pyproject.toml` with no runtime dependencies and two
+   optional extras, `postgres` (`psycopg[binary]>=3.3,<4`) and `mongodb`
+   (`pymongo>=4.19,<5`), locked in `uv.lock`. Install with
+   `uv sync --extra postgres --extra mongodb`.
+2. **Package location:** `stores/` inside this repository, not published separately.
+3. **Memory limits:** as in ST-04: 2,000 characters per memory, 10,000 memories per
+   namespace by default.
+4. **Local and CI databases:** `compose.yaml` (development only) and
+   `.github/workflows/storage.yml`.
+
+Still open: MongoDB Atlas Search and Vector Search could serve a later vector
+revision; revision 1 uses only the server's own text index, so it runs on a local
+replica set.
 

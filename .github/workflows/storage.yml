@@ -1,0 +1,51 @@
+# Database storage adapters (docs/STORAGE_SPEC.md) against PostgreSQL 18 and a
+# single-node MongoDB 9.0 replica set, started from compose.yaml. Separate from
+# tests.yml, which stays offline and dependency-free.
+name: storage
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: &storage-paths
+      - "stores/**"
+      - "harness/session.py"
+      - "harness/journal.py"
+      - "harness/memory.py"
+      - "tests/**storage**"
+      - "tools/check_storage_services.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "compose.yaml"
+      - ".github/workflows/storage.yml"
+  pull_request:
+    paths: *storage-paths
+
+permissions:
+  contents: read
+
+jobs:
+  databases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    env:
+      LITTLE_HARNESS_TEST_POSTGRES_DSN: postgresql://postgres@127.0.0.1:55432/postgres
+      LITTLE_HARNESS_TEST_MONGODB_URI: mongodb://127.0.0.1:57017/?directConnection=true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Start PostgreSQL 18 and MongoDB 9.0
+        run: docker compose up -d --wait
+      - name: Install the optional database drivers
+        run: uv sync --locked --extra postgres --extra mongodb
+      - name: Check both services
+        run: uv run python -m tools.check_storage_services
+      - name: Stop services
+        if: always()
+        run: docker compose down

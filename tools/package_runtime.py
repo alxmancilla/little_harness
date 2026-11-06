@@ -9,11 +9,13 @@ import base64
 import csv
 import hashlib
 import io
+import tomllib
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
-NAME, VERSION = "little_harness", "0.1.0"
+PROJECT = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+NAME, VERSION = "little_harness", PROJECT["project"]["version"]
 DIST_INFO = f"{NAME}-{VERSION}.dist-info"
 FILENAME = f"{NAME}-{VERSION}-py3-none-any.whl"
 
@@ -27,8 +29,8 @@ def build_wheel(output):
     files = {"harness/" + path.relative_to(runtime).as_posix(): path.read_bytes() for path in paths}
     files[DIST_INFO + "/METADATA"] = (
         f"Metadata-Version: 2.1\nName: little-harness\nVersion: {VERSION}\n"
-        "Summary: A minimal standard-library agent runtime with explicit controls\n"
-        "Requires-Python: >=3.11\n\n"
+        f"Summary: {PROJECT['project']['description']}\n"
+        f"Requires-Python: {PROJECT['project']['requires-python']}\n\n"
     ).encode("utf-8")
     files[DIST_INFO + "/WHEEL"] = (
         "Wheel-Version: 1.0\nGenerator: little-harness-stdlib\n"

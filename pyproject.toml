@@ -1,0 +1,17 @@
+[project]
+name = "little-harness"
+version = "0.1.0"
+description = "A minimal standard-library agent runtime with explicit controls"
+readme = "README.md"
+requires-python = ">=3.11"
+# The runtime (harness/) uses only the standard library. Optional extras are for the
+# database adapters in stores/; see docs/STORAGE_SPEC.md.
+dependencies = []
+
+[project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.3,<4",
+]
+mongodb = [
+    "pymongo>=4.19,<5",
+]

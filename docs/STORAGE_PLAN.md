@@ -3,7 +3,7 @@
 Companion: [storage specification](STORAGE_SPEC.md). Each phase is a bounded
 checkpoint with its own gate; no phase changes default behavior or file formats.
 
-**Current state: not started.** Python 3.11+ is in place.
+**Current state: Phase 0 complete; Phase 1 next.** Python 3.11+ is in place.
 
 Every gate includes: `python3 -m unittest -q` offline on Python 3.11 and 3.14 with no
 third-party packages installed, CI green on 3.11–3.14, docs updated with the code,
@@ -21,7 +21,23 @@ and the HotpotQA fingerprint list updated for any new `harness/*.py` file.
    services; the existing `tests.yml` stays dependency-free.
 
 Gate: decisions recorded in the spec; the new workflow starts both services and
-runs an empty suite successfully.
+checks them successfully.
+
+### Phase 0 checkpoint — complete
+
+- Decisions recorded in [spec section 7](STORAGE_SPEC.md#7-decisions).
+- `pyproject.toml` declares no runtime dependencies and two optional extras, added
+  with `uv add --optional`: `postgres` (`psycopg[binary]>=3.3,<4`) and `mongodb`
+  (`pymongo>=4.19,<5`). `uv.lock` pins them (psycopg 3.3.8, PyMongo 4.19.0).
+  `tools/package_runtime.py` reads its version and Python requirement from it.
+- `compose.yaml` starts `postgres:18` and a single-node `mongo:9.0` replica set on
+  `127.0.0.1:55432` and `127.0.0.1:57017` (configurable), with no passwords or volumes.
+- `tools/check_storage_services.py` prints only server versions; verified locally
+  against PostgreSQL 18.6 and MongoDB 9.0.4, including a majority-acknowledged
+  MongoDB transaction.
+- `.github/workflows/storage.yml` runs the check on Python 3.11 and 3.14 when
+  storage files change, or on demand. `tests.yml` is unchanged and dependency-free.
+- `python3 -m unittest -q`: 441 tests pass on Python 3.11 and 3.14 (2 skipped).
 
 ## Phase 1 — interfaces in the core (standard library only)
 
