@@ -47,6 +47,10 @@ jobs:
         run: uv sync --locked --extra postgres --extra mongodb
       - name: Check both services
         run: uv run python -m tools.check_storage_services
+      - name: Run the storage tests against the databases
+        run: uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres
+      - name: Run the full suite with the extras installed
+        run: uv run python -m unittest -q
       - name: Stop services
         if: always()
         run: docker compose down

@@ -3,7 +3,7 @@
 Companion: [storage specification](STORAGE_SPEC.md). Each phase is a bounded
 checkpoint with its own gate; no phase changes default behavior or file formats.
 
-**Current state: Phases 0 and 1 complete; Phase 2 next.** Python 3.11+ is in place.
+**Current state: Phases 0–2 complete; Phase 3 next.** Python 3.11+ is in place.
 
 Every gate includes: `python3 -m unittest -q` offline on Python 3.11 and 3.14 with no
 third-party packages installed, CI green on 3.11–3.14, docs updated with the code,
@@ -87,6 +87,35 @@ than about 80 lines.
 
 Gate: SAC-01 to SAC-08 and SAC-13 pass against PostgreSQL 18 in `storage.yml`; the
 offline suite is unchanged.
+
+### Phase 2 checkpoint — complete locally; CI gate runs on push
+
+- `stores/postgres.py` (`PostgresSessionStore`, `PostgresJournal`, `init` and
+  `journal inspect|resolve`) follows spec 5.1. One transaction per operation sets
+  `statement_timeout`, UTC and `synchronous_commit = on` locally; connecting is
+  limited to 10 seconds; psycopg errors become fixed `SessionStoreError` or
+  `JournalError` messages.
+- The rules every journal shares moved from `ExecutionJournal` into functions in
+  `harness/journal.py` (`check_outcome`, `check_inspect_limit`, `check_resolution`,
+  `inspection_record`, `run_recovery_command`), so both journals validate and report
+  identically. No behavior change for SQLite.
+- `tests/test_storage_postgres.py` runs both conformance suites (each test in its own
+  schema) and adds:
+  - SAC-03: a child process exits after rewriting rows but before `COMMIT`; the
+    previous revision loads.
+  - SAC-06: a child process exits after `begin`; the next task stops with
+    `journal_recovery_required` before any model call.
+  - SAC-07: a second connection holds the journal row lock; `begin` waits, then
+    refuses because of the other run. Removing `FOR UPDATE` makes this test fail.
+  - SAC-08: an unknown schema version, and tables without an ownership record, are
+    never adopted.
+  - SAC-13: an unreachable server with credentials in the DSN; results, traces and
+    events contain neither the host nor the credentials.
+  - Unchanged messages are not rewritten (row `xmin` is kept), the command line, and
+    the missing-driver message when the extra is absent.
+- `storage.yml` now runs the storage suites and the full suite with extras installed.
+- Locally: 490 tests pass without extras (26 skipped, database tests included) and
+  with PostgreSQL 18.6 (4 skipped). `harness/` is 2,136 lines.
 
 ## Phase 3 — MongoDB 9.0 sessions and journal
 

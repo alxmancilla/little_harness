@@ -1,9 +1,10 @@
 # Little Harness storage specification
 
-**Status:** proposed, revision 1. Phase 1 is implemented: the `SessionStore` and
-`ActionJournal` interfaces (3.1, 3.2) and their standard-library implementations,
-now also described in the [harness specification](HARNESS_SPEC.md). The rest is
-not implemented yet; see the [storage plan](STORAGE_PLAN.md). **Targets:** Python 3.11+,
+**Status:** proposed, revision 1. Implemented so far: the `SessionStore` and
+`ActionJournal` interfaces (3.1, 3.2) with their standard-library implementations,
+also described in the [harness specification](HARNESS_SPEC.md), and the PostgreSQL
+session store and journal (5.1, `stores/postgres.py`). MongoDB and memory are not
+implemented yet; see the [storage plan](STORAGE_PLAN.md). **Targets:** Python 3.11+,
 PostgreSQL 18, MongoDB 9.0 (replica set), psycopg 3.3, PyMongo 4.19.
 
 **MUST** denotes a required behavior once implemented; **MAY** an optional one.

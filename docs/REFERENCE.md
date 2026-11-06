@@ -134,6 +134,49 @@ Resolution never executes tools, restores outputs or repairs the conversation.
 Review saved history before continuing. Journaling is a local, single-owner recovery
 aid, not a distributed scheduler or an exactly-once guarantee.
 
+### PostgreSQL sessions and journals (optional)
+
+`stores.postgres` provides `PostgresSessionStore` and `PostgresJournal` for
+PostgreSQL 18, passed as `session_store=` and `journal=`. They keep the file
+store's and SQLite journal's guarantees and add a check against a second writer
+([storage specification](STORAGE_SPEC.md)). Install the driver, then name the
+environment variable that holds the connection string; never pass the string itself:
+
+````sh
+uv sync --extra postgres
+export APP_POSTGRES_DSN='postgresql://app@db.example/app?sslmode=verify-full'
+python -m stores.postgres init --dsn-env APP_POSTGRES_DSN
+````
+
+````python
+from stores.postgres import PostgresJournal, PostgresSessionStore
+
+agent = Agent(model, system, tools=tools, session_store=PostgresSessionStore("user-7", dsn_env="APP_POSTGRES_DSN"),
+              journal=PostgresJournal("support-worker", dsn_env="APP_POSTGRES_DSN"))
+````
+
+- **Setup and ownership.** `init` creates the tables in the `little_harness` schema
+  (`--schema` to change it) and records their owner and version. Without `init`,
+  the first use creates them if the role may. Tables of the same name without that
+  record, or with another version, are never adopted.
+- **Least privilege.** After `init`, the application's role needs only `USAGE` on
+  the schema and `SELECT`, `INSERT`, `UPDATE` and `DELETE` on its tables.
+- **Connections.** Use TLS (`sslmode=verify-full`). Connecting is limited to 10
+  seconds and each statement to 5 (`statement_timeout=`). Every write commits
+  synchronously. Errors carry fixed messages, never the driver's text.
+- **One writer per session.** A second agent saving the same session ID gets
+  `SessionConflictError`, and the first agent's save is kept.
+- **Recovery** uses the same rules and output as the SQLite journal:
+
+````sh
+python -m stores.postgres journal inspect --dsn-env APP_POSTGRES_DSN --journal-id support-worker --pending
+python -m stores.postgres journal resolve --dsn-env APP_POSTGRES_DSN --journal-id support-worker \
+  ACTION_ID --outcome completed --confirm
+````
+
+For local development, `compose.yaml` starts PostgreSQL 18 on `127.0.0.1:55432`
+without a password or TLS; see [Tests](#tests) for running the database suites.
+
 ## Teaching tools and retrieval
 
 The teaching application provides the following tools; the core runtime has none
@@ -256,4 +299,18 @@ After preparing the full development set, include the installed-data checks with
 `HARNESS_TEST_HOTPOTQA_DEV=1 python3 -m unittest -q`. This does not download data or
 make live-model calls. Shared fixtures live in [tests/helpers.py](../tests/helpers.py);
 importing them does not initialize applications.
+
+Storage backends share the contract suites in
+[tests/storage_conformance.py](../tests/storage_conformance.py). The PostgreSQL tests
+skip unless the extra is installed and a test database is named; each test creates
+and drops its own schema:
+
+````sh
+docker compose up -d --wait postgres
+uv sync --extra postgres
+LITTLE_HARNESS_TEST_POSTGRES_DSN=postgresql://postgres@127.0.0.1:55432/postgres \
+  uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres
+````
+
+The [storage workflow](../.github/workflows/storage.yml) runs them in CI.
 

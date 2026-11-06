@@ -35,6 +35,33 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
+# Rules shared by every ActionJournal implementation.
+def check_outcome(status, outcome_unknown):
+    if (status not in STATUSES or (status in {"timed_out", "outcome_unknown"} and not outcome_unknown)
+            or (status in {"completed", "not_run"} and outcome_unknown)):
+        raise ValueError("invalid journal outcome")
+
+
+def check_inspect_limit(limit):
+    if type(limit) is not int or not 1 <= limit <= 1000:
+        raise ValueError("inspection limit must be between 1 and 1000")
+
+
+def check_resolution(outcome, confirm):
+    if not confirm or outcome not in {"completed", "failed", "not_run"}:
+        raise ValueError("recovery requires confirmation and a known outcome")
+
+
+def inspection_record(record):
+    """Report an unfinished action as outcome_unknown, keeping what was recorded."""
+    record["recorded_status"] = record["status"]
+    if record["status"] == "started":
+        record["status"], record["outcome_unknown"] = "outcome_unknown", True
+    for name in ("risky", "run_closed", "outcome_unknown", "recovery_required"):
+        record[name] = bool(record[name])
+    return record
+
+
 @runtime_checkable
 class ActionJournal(Protocol):
     """Durable action records; every failure is JournalError or JournalRecoveryRequired."""
@@ -141,9 +168,7 @@ class ExecutionJournal:
         return action_id
 
     def finish(self, action_id, status, outcome_unknown=False):
-        if (status not in STATUSES or (status in {"timed_out", "outcome_unknown"} and not outcome_unknown)
-                or (status in {"completed", "not_run"} and outcome_unknown)):
-            raise ValueError("invalid journal outcome")
+        check_outcome(status, outcome_unknown)
         with self._connection() as connection:
             self._verify(connection)
             result = connection.execute("""UPDATE actions SET status = ?, outcome_unknown = ?, finished_at = ?
@@ -162,29 +187,18 @@ class ExecutionJournal:
 
     def inspect(self, *, pending_only=False, limit=100):
         """Read-only, bounded metadata; never create a file or rewrite live records."""
-        if type(limit) is not int or not 1 <= limit <= 1000:
-            raise ValueError("inspection limit must be between 1 and 1000")
+        check_inspect_limit(limit)
         with self._connection(readonly=True) as connection:
             self._verify(connection)
             where = "WHERE " + PENDING if pending_only else ""
             rows = connection.execute(f"""SELECT a.*, r.closed AS run_closed, ({PENDING}) AS recovery_required
                 FROM actions a JOIN runs r USING (run_id) {where}
                 ORDER BY a.started_at DESC, a.action_id DESC LIMIT ?""", (limit,)).fetchall()
-        records = []
-        for row in rows:
-            record = dict(row)
-            record["recorded_status"] = record["status"]
-            if record["status"] == "started":
-                record["status"], record["outcome_unknown"] = "outcome_unknown", True
-            for name in ("risky", "run_closed", "outcome_unknown", "recovery_required"):
-                record[name] = bool(record[name])
-            records.append(record)
-        return records
+        return [inspection_record(dict(row)) for row in rows]
 
     def resolve(self, action_id, outcome, *, confirm=False):
         """Human assertion, not proof, approval, undo, session repair or a retry."""
-        if not confirm or outcome not in {"completed", "failed", "not_run"}:
-            raise ValueError("recovery requires confirmation and a known outcome")
+        check_resolution(outcome, confirm)
         with self._connection() as connection:
             self._verify(connection)
             connection.execute("BEGIN IMMEDIATE")
@@ -211,11 +225,15 @@ def main(argv=None):
     resolve.add_argument("--confirm", action="store_true", required=True)
     args = parser.parse_args(argv)
     try:
-        journal = ExecutionJournal(args.path)
-        if args.command == "inspect":
-            print(json.dumps(journal.inspect(pending_only=args.pending, limit=args.limit), indent=2))
-        else:
-            journal.resolve(args.action_id, args.outcome, confirm=args.confirm)
-            print("Recovery decision recorded; no action was executed. Review the session before continuing.")
+        run_recovery_command(ExecutionJournal(args.path), args)
     except (JournalError, ValueError, OSError):
         parser.exit(1, "Journal operation failed; check the file, action state and recovery options.\n")
+
+
+def run_recovery_command(journal, args):
+    """Shared inspect/resolve behavior for every journal command line."""
+    if args.command == "inspect":
+        print(json.dumps(journal.inspect(pending_only=args.pending, limit=args.limit), indent=2))
+    else:
+        journal.resolve(args.action_id, args.outcome, confirm=args.confirm)
+        print("Recovery decision recorded; no action was executed. Review the session before continuing.")
