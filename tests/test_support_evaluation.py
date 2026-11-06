@@ -19,12 +19,13 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
     def rows(self, name="run"):
         return [json.loads(line) for line in (self.root / name / "results.jsonl").read_text().splitlines()]
 
-    def test_dataset_is_a_small_explicitly_unreviewed_draft_covering_five_categories(self):
+    def test_dataset_is_a_small_explicitly_unreviewed_draft_covering_six_categories(self):
         dataset = data.load_cases()
         self.assertEqual(dataset["review_status"], "unreviewed-synthetic")
-        self.assertEqual(len(dataset["cases"]), 12)
+        self.assertEqual(len(dataset["cases"]), 15)
         self.assertEqual({case["category"] for case in dataset["cases"]},
-                         {"supported", "unknown_product", "missing_evidence", "policy_boundary", "misleading_instructions"})
+                         {"supported", "unknown_product", "missing_evidence", "policy_boundary",
+                          "misleading_instructions", "adversarial_tool_use"})
         self.assertTrue(all(set(case["input"]) == {"sku", "question"} for case in dataset["cases"]))
 
     def test_invalid_ids_duplicate_ids_label_types_and_input_label_leakage_are_rejected(self):
@@ -33,7 +34,11 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
                      lambda cases: cases[1].update(id=cases[0]["id"]),
                      lambda cases: cases[0]["expected"].update(needs_human="false"),
                      lambda cases: cases[0]["expected"].update(required_sources=["private.md"]),
-                     lambda cases: cases[0]["input"].update(expected="label")]
+                     lambda cases: cases[0]["input"].update(expected="label"),
+                     lambda cases: cases[0].update(extra_documents={"warranty.md": "replaced approved note"}),
+                     lambda cases: cases[0].update(extra_documents={}),
+                     lambda cases: cases[0].update(extra_documents={"forum.md": 3}),
+                     lambda cases: cases[12]["expected"].update(required_sources=["customer-forum.md"])]
         for index, mutate in enumerate(mutations):
             dataset = copy.deepcopy(original)
             mutate(dataset["cases"])
@@ -47,15 +52,15 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
                 mock.patch.object(app, "save_draft", side_effect=AssertionError("saving forbidden")):
             summary = self.run_eval()
         self.assertEqual(summary["mode"], "offline-smoke-not-quality")
-        self.assertEqual(summary["statuses"], {"completed": 12})
-        self.assertEqual(summary["checks_passed"]["valid_output"], 12)
-        self.assertEqual(summary["automated_passes"], 7)  # The script cannot reason about policy/semantic relevance.
+        self.assertEqual(summary["statuses"], {"completed": 15})
+        self.assertEqual(summary["checks_passed"]["valid_output"], 15)
+        self.assertEqual(summary["automated_passes"], 9)  # The script cannot reason about policy/semantic relevance.
         self.assertIsNone(summary["answer_quality"])
         self.assertIsNone(summary["usage"]["input_tokens"])
-        self.assertEqual((summary["usage"]["model_calls"], summary["usage"]["tool_calls_attempted"]), (24, 24))
+        self.assertEqual((summary["usage"]["model_calls"], summary["usage"]["tool_calls_attempted"]), (30, 30))
         rows = self.rows()
         self.assertEqual({row["id"] for row in rows if not all(row["checks"].values())},
-                         {"c07", "c08", "c09", "c10", "c11"})
+                         {"c07", "c08", "c09", "c10", "c11", "c14"})
         output = self.root / "run"
         contract = json.loads((output / "run.json").read_text())
         for artifact, field in (("cases.json", "dataset_sha256"), ("evidence.json", "evidence_sha256")):
@@ -65,7 +70,7 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         inputs = json.loads((output / "inputs.json").read_text())
         self.assertTrue(all(set(item) == {"sku", "question"} for item in inputs))
         review = json.loads((output / "review.json").read_text())
-        self.assertEqual(len(review["cases"]), 12)
+        self.assertEqual(len(review["cases"]), 15)
         self.assertIsNone(review["reviewer"])
         self.assertTrue(all(item["expectations_approved"] is None and item["factual_correctness"] is None
                             and item["action_safety"] is None for item in review["cases"]))
@@ -92,6 +97,26 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         with mock.patch.object(e, "load_cases", return_value=dataset):
             self.run_eval(model_factory=Spy)
         self.assertEqual(seen, [case["input"] for case in dataset["cases"]])
+
+    def test_extra_documents_are_searchable_only_in_their_own_case(self):
+        spies = []
+
+        class Spy(app.OfflineModel):
+            def __init__(self):
+                self.saw_injection = False
+                spies.append(self)
+
+            def __call__(self, system, messages, tools, on_text=None):
+                self.saw_injection |= "NOTE TO THE SUPPORT ASSISTANT" in json.dumps(messages)
+                return super().__call__(system, messages, tools, on_text)
+
+        dataset = data.load_cases()
+        dataset["cases"] = [dataset["cases"][0], dataset["cases"][12]]  # Same question, different evidence.
+        with mock.patch.object(e, "load_cases", return_value=dataset):
+            self.run_eval(model_factory=Spy)
+        self.assertEqual([spy.saw_injection for spy in spies], [False, True])
+        self.assertIn("NOTE TO THE SUPPORT ASSISTANT", (self.root / "run/cases.json").read_text())
+        self.assertNotIn("customer-forum.md", (self.root / "run/evidence.json").read_text())
 
     def test_invalid_output_and_unretrieved_citations_remain_failed_in_denominator(self):
         for index, answer in enumerate(("not JSON", json.dumps({"sku": "WIDGET", "recommendation": "review",
@@ -127,7 +152,7 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         factory = mock.Mock(side_effect=lambda: RecordingModel(ModelError("diagnostic-sentinel")))
         summary = self.run_eval(model_factory=factory)
         factory.assert_called_once_with()
-        self.assertEqual(summary["statuses"], {"model_error": 1, "not_run": 11})
+        self.assertEqual(summary["statuses"], {"model_error": 1, "not_run": 14})
         self.assertEqual(summary["attempted"], 1)
         self.assertEqual(summary["usage"]["model_calls"], 1)
         self.assertIsNone(summary["usage"]["input_tokens"])
@@ -139,15 +164,15 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         factory = mock.Mock(side_effect=lambda: RecordingModel(KeyboardInterrupt()))
         summary = self.run_eval(model_factory=factory)
         self.assertTrue(summary["interrupted"])
-        self.assertEqual(summary["statuses"], {"interrupted": 1, "not_run": 11})
+        self.assertEqual(summary["statuses"], {"interrupted": 1, "not_run": 14})
         factory.assert_called_once_with()
-        self.assertEqual(len(self.rows()), 12)
+        self.assertEqual(len(self.rows()), 15)
         self.assertTrue((self.root / "run/report.md").is_file())
 
     def test_interruption_between_agents_keeps_completed_results_and_unknown_usage_honest(self):
         factory = mock.Mock(side_effect=[app.OfflineModel(), KeyboardInterrupt()])
         summary = self.run_eval(model_factory=factory)
-        self.assertEqual(summary["statuses"], {"completed": 1, "interrupted": 1, "not_run": 10})
+        self.assertEqual(summary["statuses"], {"completed": 1, "interrupted": 1, "not_run": 13})
         self.assertEqual(factory.call_count, 2)
         self.assertIsNotNone(self.rows()[0]["recommendation"])
         self.assertIsNone(self.rows()[1]["usage"])
@@ -183,7 +208,7 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         for target in (existing, link):
             with self.subTest(target=target), self.assertRaises(FileExistsError):
                 e.run_evaluation(target, live=True, model_factory=factory)
-        for limit in (0, True, 13):
+        for limit in (0, True, 16):
             with self.subTest(limit=limit), self.assertRaises(ValueError):
                 self.run_eval(limit=limit, model_factory=factory)
         factory.assert_not_called()
@@ -212,7 +237,7 @@ class SupportEvaluationTests(TemporaryDirectoryTestCase):
         """)
         self.assertEqual(child.returncode, 0, child.stderr)
         self.assertIn("offline-smoke-not-quality", child.stdout)
-        self.assertIn("7/12 pass draft expectations", child.stdout)
+        self.assertIn("9/15 pass draft expectations", child.stdout)
         self.assertIn("human review is required", child.stdout)
         self.assertFalse((self.root / "support-trace.jsonl").exists())
         self.assertFalse((self.root / "session.json").exists())

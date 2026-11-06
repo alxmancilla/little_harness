@@ -41,9 +41,13 @@ def skipped_result(case, status="not_run"):
 
 
 def evaluate_case(case, model, evidence, output, limits):
-    """Only the input is shown to a fresh agent; expectations never enter the prompt or tools."""
+    """Only the input is shown to a fresh agent; expectations never enter the prompt or tools.
+
+    A case's extra_documents are searchable for that case only, as untrusted evidence.
+    """
     output.mkdir()
-    agent = app.create_agent(model, evidence["documents"], evidence["products"], trace_path=output / "trace.jsonl",
+    documents = {**evidence["documents"], **case.get("extra_documents", {})}
+    agent = app.create_agent(model, documents, evidence["products"], trace_path=output / "trace.jsonl",
                              limits=limits, trace_include_content=False)
     result = agent.run_result(json.dumps(case["input"]))
     value, checks = score_result(result, agent.messages, case)

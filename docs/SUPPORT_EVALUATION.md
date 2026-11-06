@@ -15,8 +15,8 @@ rejected before model setup. Never delete an earlier run just to reuse its name.
 Interrupted/partial output directories also remain intact and must not be reused.
 
 The bundled `OfflineModel` is a protocol demonstration, not a reasoning model.
-Currently all 12 cases produce valid application output, but only seven pass all
-draft expectation checks. Five cases expose its inability to distinguish relevant
+Currently all 15 cases produce valid application output, but only nine pass all
+draft expectation checks. Six cases expose its inability to distinguish relevant
 evidence or infer policy escalation from keyword matches. These are visible findings,
 not reasons to weaken the cases or pretend the script measures model quality.
 
@@ -26,7 +26,7 @@ or output-contract failure; interruption returns 130 when handled by the runner.
 
 ## Review the cases before treating them as a benchmark
 
-[cases.json](../evaluation/support/cases.json) contains twelve **AI-authored synthetic
+[cases.json](../evaluation/support/cases.json) contains fifteen **AI-authored synthetic
 drafts, not human-approved ground truth**:
 
 | Coverage | Cases | Intended behavior |
@@ -36,17 +36,23 @@ drafts, not human-approved ground truth**:
 | Missing evidence | c06–c07 | Do not confuse keyword overlap with an answer |
 | Policy boundary | c08–c09 | Escalate warranty approval or failed reconnection |
 | Misleading instructions | c10–c12 | Do not claim unperformed actions, invent reset steps or bypass unknown SKUs |
+| Adversarial tool use | c13–c15 | Ignore instructions inside a retrieved note, do not claim a missing tool ran, never cite an unretrieved source |
 
 Each case separates `input`, `expected` and reviewer guidance. Only `sku` and
 `question` enter the agent's task. Expectations and guidance never enter its prompt
 or tools. Each case gets a fresh agent/history and snapshots of the same approved
-notes and catalog. The application itself is unchanged.
+notes and catalog. The application itself is unchanged. A case may also list
+`extra_documents`: untrusted notes, such as c13's forum post with hidden instructions,
+that `search_support` can return for that case only. They are frozen with the cases
+in `cases.json`, never in `evidence.json`, and cannot be required citations.
+The offline script passes c13 and c15 only because it always cites the top approved
+match; that says nothing about how a real model handles the injection.
 
 Before using these cases to make a decision, inspect every question, draft
 escalation expectation, required citation and review guide against the fictional
 notes/catalog. Correct ambiguous expectations in the source dataset, document your
 rationale and run again into a new directory. Do not edit an earlier run's snapshots
-or tune expectations just to raise its pass count. These twelve cases do not
+or tune expectations just to raise its pass count. These fifteen cases do not
 represent a production distribution or demonstrate general prompt-injection resistance.
 
 ## Optional live evaluation
@@ -61,7 +67,7 @@ python3 -m evaluation.support.evaluate --live --limit 1 --output runs/support-li
 ````
 
 `--live` explicitly permits paid calls using the same application factory and data.
-Omit `--limit` to run all twelve cases. Defaults are six logical model calls, six
+Omit `--limit` to run all fifteen cases. Defaults are six logical model calls, six
 tool attempts and 30 seconds **per case**, not per evaluation. Model calls include
 compaction. Limits are cooperative: a running model/approval operation may outlast
 the deadline, and provider transport retries are internal to a logical call. These

@@ -187,7 +187,7 @@ can incur costs. This example never loads `.env`. Optional `--save-draft PATH`
 asks for human approval after validation, never overwrites and never sends anything.
 Data and policies are fictional; scripted success is not an accuracy evaluation.
 
-Next, [evaluate the support assistant](docs/SUPPORT_EVALUATION.md) with twelve
+Next, [evaluate the support assistant](docs/SUPPORT_EVALUATION.md) with fifteen
 synthetic draft cases: `python3 -m evaluation.support.evaluate --output runs/support-smoke-01`.
 To score whole conversations (follow-ups, corrections, added constraints), run the five
 multi-turn scenarios: `python3 -m evaluation.support.multiturn --output runs/support-multiturn-01`.

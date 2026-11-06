@@ -22,6 +22,13 @@ def _valid_turn(task, expected):
             and len(expected["required_sources"]) == len(set(expected["required_sources"])))
 
 
+def _valid_extra_documents(documents):
+    """Untrusted notes added to one case's search results; never citable as required evidence."""
+    return (type(documents) is dict and 1 <= len(documents) <= 2
+            and all(type(name) is str and re.fullmatch(r"[a-z0-9_-]+\.md", name) and name not in DOCUMENT_NAMES
+                    and type(text) is str and 1 <= len(text) <= 6000 for name, text in documents.items()))
+
+
 def load_cases(path=DEFAULT_CASES):
     """Validate the local reviewable case format before any model calls or output writes."""
     dataset = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -31,8 +38,11 @@ def load_cases(path=DEFAULT_CASES):
         raise ValueError("invalid support dataset")
     seen = set()
     for case in dataset["cases"]:
-        if type(case) is not dict or set(case) != {"id", "category", "input", "expected", "review_guide"}:
+        if type(case) is not dict or set(case) - {"extra_documents"} != {"id", "category", "input", "expected",
+                                                                         "review_guide"}:
             raise ValueError("invalid support case fields")
+        if "extra_documents" in case and not _valid_extra_documents(case["extra_documents"]):
+            raise ValueError("invalid support case extra documents")
         if (type(case["id"]) is not str or not re.fullmatch(r"c[0-9]{2}", case["id"])
                 or case["id"] in seen or type(case["category"]) is not str
                 or not re.fullmatch(r"[a-z_]{1,40}", case["category"])
