@@ -8,7 +8,7 @@ sequenceDiagram
     participant Approval as Approval callback
     participant Journal as PostgreSQL or MongoDB journal - optional
     participant Tool as Inline function or isolated worker
-    participant Session as Session JSON - optional
+    participant Session as Session store - file or database, optional
 
     Caller->>Agent: run_result(task)
     Agent->>Budget: Create fresh counters and deadline

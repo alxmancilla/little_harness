@@ -4,7 +4,8 @@ This is the implementation companion to the [behavioral specification](HARNESS_S
 It describes the current standard-library design, not a proposed framework migration.
 The [separation specification](HARNESS_SEPARATION_SPEC.md) and
 [migration plan](HARNESS_MIGRATION_PLAN.md) record the completed boundaries: runtime,
-teaching/HotpotQA applications, host evaluation and an unrelated inventory example.
+teaching/HotpotQA applications, host evaluation, unrelated inventory and support
+examples (with separate support evaluation) and optional database adapters in `stores/`.
 
 ## 1. Explain it in one minute
 
@@ -29,8 +30,10 @@ flowchart LR
     Agent <--> Model["Model adapters / scripted model"]
     Agent --> Gates["Validate, policy, approval"] --> Exec["Inline tool / isolated worker"]
     Agent --> Budget["Shared ExecutionBudget"]
-    Agent --> Session[("Session JSON")]; Agent --> Trace[("Trace JSONL")]
+    Agent --> Session[("SessionStore - file or database")]; Agent --> Trace[("Trace JSONL")]
     Gates --> Journal[("Optional database journal")]; Agent --> Events["Optional RunEvent callback"]
+    Exec --> Memory[("Optional MemoryStore via memory tools")]
+    Stores["Optional stores/ - PostgreSQL, MongoDB"] -.-> Session & Journal & Memory
 ````
 
 This overview compresses execution ordering; use the detailed source and sequence
@@ -50,10 +53,18 @@ view below for the journal commit-before-invocation requirement.
 | `harness/journal.py`: `ActionJournal` | The journal interface and shared recovery rules; database implementations live in `stores/` | No arguments/outputs; no replay or rollback |
 | `harness/memory.py`: `MemoryStore`, `memory_tools` | Scoped long-term memory interface and a registry of ordinary read/write tools; database implementations live in `stores/` | Application selects namespace; memory text is untrusted; no automatic prompt injection or extraction |
 | `harness/events.py`: `RunEvent` | Versioned, deeply immutable observation snapshots | Delivery/failure handling lives in `Agent._emit` |
+| `harness/config.py`: `ObservabilityConfig`, `ToolConfig`, `ContextConfig`, `merge_group` | Optional grouped `Agent` keyword arguments | A group cannot be combined with its non-default individual arguments; validation stays in `Agent` |
+| `harness/__main__.py` | `python -m harness` only points users to the `stores.*` journal commands | No recovery logic of its own |
+| `stores/postgres.py`, `stores/mongodb.py` | `SessionStore`, `ActionJournal` and `MemoryStore` implementations; `python -m stores.postgres\|stores.mongodb init` and `journal inspect\|resolve` | Optional drivers; recovery never runs actions |
+| `stores/memory.py`: `memory_worker_tools`; `stores/_common.py` | Isolated-worker memory tools; shared storage CLI | Not imported by `harness` |
+| `tools/` | `package_runtime`, `check_storage_services`, `run_storage_tests`, `benchmark_storage` maintenance commands | Not imported by the runtime |
 | `agents/teaching/` | Explicit config, tool/agent factories, arithmetic/files/retrieval tools, demos and CLI | Imports the public runtime; no configuration loading or workspace creation on import |
 | `agents/hotpotqa/` | Explicit config, restricted tools, per-agent accounting and sequential researcher/reviewer workflow | Composes plain runtime instances with public hooks; no legacy globals/private runtime overrides |
+| `agents/hotpotqa/worker.py` | Shared worker mechanics for the HotpotQA roles | Role orchestration and budgets stay in each application |
 | `evaluation/hotpotqa/` | Host preparation/loading, per-question runners, scoring and comparisons | Applications do not import evaluation; only the host reads labels |
 | `examples/inventory_agent.py` | Unrelated read-only inventory application | Imports only public `harness` exports and stdlib; copyable without teaching/HotpotQA/evaluation files |
+| `examples/support_agent.py` | Narrow support assistant; offline by default, `--live` enables paid calls | Public `harness` API and stdlib only; evidence, output validation and draft approval are application-owned |
+| `evaluation/support/` | Offline-first evaluation of the support example | Not part of the runtime; the example does not import it |
 
 Optional controls are ordinary Python objects/modules, **not separate services**.
 New applications import `harness` and supply prompts, registries and writable roots.
@@ -121,7 +132,8 @@ credentials and network; `worker_env=` can replace a worker's environment variab
 | --- | --- | --- |
 | `Agent.messages` | In-memory conversation across successive tasks | Durable proof of tool effects |
 | `ExecutionBudget` | Fresh counters/deadline for each task | Hard preemption or exact billing |
-| Session JSON | Optional atomic conversation snapshot; interactive CLI default | Automatic output replay or action reconciliation |
+| Session | Optional conversation snapshot: atomic JSON file (interactive CLI default) or a database `session_store=` | Automatic output replay or action reconciliation |
+| Long-term memory | Optional `MemoryStore`, namespace-scoped, reached through ordinary tools; separate from sessions and journal | Trusted instructions — recalled text is untrusted data |
 | Trace JSONL | Append-only metadata by default; content explicitly opt-in; default `trace.jsonl` | Replay engine, secret-redacted log or authoritative action ledger |
 | Database journal | Optional durable run/action metadata across restarts | External exactly-once execution or cancellation |
 | Event callback | Synchronous ephemeral observations during a task | Durable queue, permission or complete delivery |

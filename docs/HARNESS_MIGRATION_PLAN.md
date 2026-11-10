@@ -62,6 +62,8 @@ identity, CLI environment precedence, subprocess tools and complete fingerprints
   preserve module/class identity and monkeypatch behavior in either import order.
   Root recovery/worker commands remain supported. The complete runtime directory
   runs without any root/application files; install metadata is not yet provided.
+  *(Later note: superseded — `pyproject.toml` and the standard-library wheel builder
+  `tools/package_runtime.py` now exist, covered by `tests/test_runtime_distribution.py`.)*
 - `agents/teaching/` owns configuration, tools, prompts, demos and CLI. Frozen
   `TeachingConfig`, `create_tools` and `create_agent` allow independent workspaces
   and corpora using only the public runtime API. Imports/tool factories create no
@@ -184,6 +186,8 @@ addition, paid evaluation or deployment is implied by this plan.
   `git diff --check` pass; the separation diagram renders.
 - All four planned phases are complete. The runtime is independently copyable;
   install/distribution metadata, new frameworks and deployment remain out of scope.
+  *(Later note: the install-metadata part is superseded — see `pyproject.toml`,
+  `tools/package_runtime.py` and `tests/test_runtime_distribution.py`.)*
 
 ## Post-separation cleanup checkpoint — complete
 

@@ -15,6 +15,9 @@ flowchart LR
         gates --> invoke["Agent._dispatch and _invoke_tool"]
         invoke -->|"default"| inline["Registered function - inline"]
         agent -.-> events["RunEvent callback - harness/events.py"]
+        config["Optional keyword groups - harness/config.py"] -.-> agent
+        agent --> sessionstore["SessionStore interface - harness/session.py"]
+        memtools["memory_tools and MemoryStore interface - harness/memory.py"] --> registry
     end
 
     clients <-->|"requests and streamed responses"| provider["External model API or local server"]
@@ -26,14 +29,16 @@ flowchart LR
     worker -->|"outcome - no parent-memory mutation"| invoke
 
     subgraph storage["Storage - distinct responsibilities"]
-        session[("Optional session JSON - conversation")]
-        trace[("JSONL trace - content-rich diagnostics")]
-        database[("Optional PostgreSQL or MongoDB journal - action metadata")]
+        session[("Session JSON file - conversation")]
+        trace[("JSONL trace - metadata-only by default; trace_include_content opt-in")]
+        database[("Optional PostgreSQL or MongoDB via stores/ - sessions, journal, memory")]
     end
-    agent --> session
+    sessionstore --> session
+    sessionstore --> database
     agent --> trace
     journal --> database
-    recovery["Human recovery CLI - inspect and resolve, never replay"] --> journal
+    memtools --> database
+    recovery["Human recovery CLI - python3 -m stores.postgres|stores.mongodb journal inspect/resolve, never replay"] --> journal
 
     subgraph access["Tool-accessible resources - governed by tool code and OS permissions"]
         workspace["Workspace files"]

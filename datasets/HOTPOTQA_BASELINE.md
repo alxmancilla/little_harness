@@ -89,7 +89,7 @@ Provider code lives in `harness/model_clients.py`;
 shared prompts, tools, metering and status helpers live in `agents/hotpotqa/common.py`
 and workers run as `python3 -m agents.hotpotqa.single` or `python3 -m agents.hotpotqa.multi`.
 Root aliases, commands and compatibility classes are removed. Prompts, tool schemas, budgets, scoring and
-artifact formats; `hardened-v1` remains the behavior version.
+artifact formats are unchanged; `hardened-v1` remains the behavior version.
 
 Code fingerprints now include both extracted modules. Missing or changed shared
 hashes fail reference preflight before inference. Even pre-refactor `hardened-v1`
@@ -129,7 +129,8 @@ and every teaching package file under `agents/teaching/`
 implementations through explicit configuration, so these remain dependencies.
 The whole runtime directory can now be copied independently. References made
 before this move need a fresh pair; neither prompts/scoring nor artifact formats
-changed.
+changed. The boundary now also fingerprints `harness/config.py`, `harness/memory.py`
+and `harness/session.py`, so older reference runs need a fresh pair too.
 
 Phase 3 fingerprints `agents/hotpotqa/__init__.py`, `common.py` and `single.py`
 as shared dependencies; multi-agent runs also record `agents/hotpotqa/multi.py`.

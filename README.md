@@ -2,9 +2,10 @@
 
 **A small Python runtime for agents, with explicit controls.**
 
-Includes teaching applications and reproducible evaluation tools, built entirely
-with the **Python 3 standard library**. No third-party packages, agent framework,
-database service or API key are needed for the offline examples.
+Includes teaching applications and reproducible evaluation tools. The runtime uses
+only the **Python standard library** (Python 3.11+); the optional `stores/` database
+adapters need the `postgres` (psycopg) or `mongodb` (pymongo) extras. No third-party packages, agent
+framework, database service or API key are needed for the offline examples.
 
 The core loop is simple: ask a model, validate its tool requests, execute permitted
 tools, return their results and repeat. Applications supply the prompt and tools;
@@ -83,9 +84,13 @@ environment or `.env`.
 | [agents/teaching/](agents/teaching/) | Teaching tools, explicit configuration, factories, scripted demos and CLI |
 | [agents/hotpotqa/](agents/hotpotqa/) | Restricted question-answering tools, single-agent and researcher/reviewer workflows, shared worker helpers |
 | [evaluation/hotpotqa/](evaluation/hotpotqa/) | Dataset preparation, per-question execution, host-only scoring and comparisons |
+| [evaluation/support/](evaluation/support/) | Support assistant evaluation: 17 single-turn cases and 5 multi-turn scenarios |
 | [examples/inventory_agent.py](examples/inventory_agent.py) | Independent application using the public runtime API |
+| [examples/support_agent.py](examples/support_agent.py) | Support assistant with its fictional knowledge in `examples/support_knowledge/` |
 | [lessons/](lessons/) | Guided offline labs, learner exercises, checks and reference solutions; start at [LEARN.md](LEARN.md) |
-| [tests/](tests/) | Offline regressions; reusable fixtures in `tests/helpers.py` |
+| [tools/](tools/) | Runtime wheel builder, storage service check, storage test runner and storage benchmark |
+| [compose.yaml](compose.yaml) | Local PostgreSQL 18 and MongoDB 9.0 for the storage tests |
+| [tests/](tests/) | Offline regressions; database storage suites skip unless databases are configured; reusable fixtures in `tests/helpers.py` |
 | [datasets/](datasets/) | Dataset guides and the attributed ten-question HotpotQA demo |
 | [docs/](docs/) | Runtime contracts, architecture diagrams and migration history |
 
@@ -206,6 +211,16 @@ See the [execution controls reference](docs/REFERENCE.md#execution-controls),
 including [isolated tool timeouts](docs/REFERENCE.md#isolated-tool-timeouts) and
 [recovery without replaying](docs/REFERENCE.md#recover-without-replaying).
 
+Related keywords can instead be grouped; each group is equivalent to its keywords:
+
+````python
+from harness import Agent, ContextConfig, ObservabilityConfig, ToolConfig
+agent = Agent(model, "Be helpful.", tools=tools,
+              observability=ObservabilityConfig(trace_path="app-trace.jsonl", quiet=True),
+              tool_config=ToolConfig(approve=lambda name, args: False, max_tool_output=4000),
+              context=ContextConfig(session_path="app.session.json"))
+````
+
 ### Optional database storage and memory
 
 PostgreSQL and MongoDB adapters provide durable sessions, action journals and
@@ -230,6 +245,25 @@ on ten development questions, offline by default:
 
 See the reference for [teaching tools and corpus limits](docs/REFERENCE.md#teaching-tools-and-retrieval)
 and the [HotpotQA evaluation workflow](docs/REFERENCE.md#hotpotqa-evaluation).
+
+## Scope
+
+The supported core is `harness/`: one synchronous standard-library loop. Everything
+else—database storage in `stores/`, the teaching application, HotpotQA and support
+evaluations, and the lessons—is optional and built on its public API.
+
+Deliberately out of scope:
+
+- **Concurrency:** no async API, parallel tool execution or overlapping runs on one
+  agent; use one agent per sequential conversation.
+- **Isolation:** no OS sandbox, tenant isolation, network confinement or secret detection.
+- **Effects:** no exactly-once execution, automatic retries or rollback.
+- **Providers:** only Anthropic, OpenAI (Responses and Chat Completions) and gateway
+  routes are built in; any other model is a plain callable you supply.
+- **Guarantees:** no hard billing/CPU/memory limits, full JSON Schema validation or accuracy claims.
+
+The [runtime specification](docs/HARNESS_SPEC.md#1-purpose-and-scope) is the
+authoritative list of goals and non-goals.
 
 ## Safety and operational limits
 

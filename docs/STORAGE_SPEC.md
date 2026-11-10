@@ -121,8 +121,8 @@ not the model. The private worker protocol carries the current run ID and output
 `import harness` MUST NOT import `psycopg`, `pymongo` or `stores`. An adapter module
 attempts to import its driver when that module is imported; constructing an adapter
 without it raises a clear `ImportError` naming the missing optional dependency.
-Existing defaults, file formats and the roughly 2,000-line scale of `harness/` are
-preserved; the larger runtime was accepted in Phase 4 and adapters do not count toward it.
+Existing defaults and file formats are preserved. `harness/` is now about 2,200 lines
+(larger than the original target, accepted in Phase 4); adapters do not count toward it.
 
 ### ST-02 — Save sessions atomically, with one writer
 
@@ -224,6 +224,7 @@ Each journal MUST meet FR-08 exactly:
   `LITTLE_HARNESS_TEST_MONGODB_URI` is set. Each test uses unique IDs and cleans up.
 - `python3 -m unittest` stays offline and dependency-free. A separate CI job runs
   the database suites against `postgres:18` and a single-node `mongo:9.0` replica set.
+  Locally, `uv run python -m tools.run_storage_tests` mirrors that job in one command.
 - Crash tests kill a worker process between `begin` and `finish`, and during a session
   save, then check that recovery is required or that the previous revision loads.
 

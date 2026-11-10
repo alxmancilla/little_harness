@@ -10,9 +10,13 @@ flowchart TB
     Eval --> Prediction["agents/hotpotqa/prediction: label-free contract"]
     Single --> Prediction
     Multi --> Prediction
-    Core --> Leaves["harness/: models, limits, policies, events, journal, workers"]
-    Recovery["Package journal inspection / human recovery command"] --> Leaves
-    Core --> State[("Sessions / traces / optional journal")]
+    Core --> Leaves["harness/: models, limits, policies, events, journal, memory, session, config, workers"]
+    Stores["stores/: PostgreSQL and MongoDB adapters, journal recovery CLI"] --> Leaves
+    PkgMain["python -m harness: points to stores.postgres / stores.mongodb"] --> Leaves
+    Support["examples/support_agent"] --> Core
+    SupportEval["evaluation/support: offline-first evaluation"] --> Support
+    Tools["tools/: packaging and storage test utilities"] -.-> Stores
+    Core --> State[("Sessions / traces / optional journal and memory")]
     Eval -. "fingerprints full runtime boundary" .-> Core
     Eval -. "fingerprints" .-> Leaves
     Eval -. "fingerprints application dependencies" .-> Common

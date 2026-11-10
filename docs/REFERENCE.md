@@ -56,7 +56,7 @@ Live startup prints the selected provider, model and a credential-filtered endpo
 | `HARNESS_MAX_SECONDS` | Unset | Cooperative task deadline in seconds |
 | `HARNESS_TOOL_TIMEOUT_SECONDS` | Unset | Positive timeout for isolated tool execution |
 | `HARNESS_READ_ONLY` | `0` | `1` permits only explicitly read-only tools |
-| `HARNESS_JOURNAL_BACKEND`, `HARNESS_JOURNAL_ID` | Unset | Teaching CLI journal backend (`postgres` or `mongodb`) and stable journal ID |
+| `HARNESS_JOURNAL_BACKEND`, `HARNESS_JOURNAL_ID` | Unset | Teaching CLI journal backend (`postgres` or `mongodb`) and stable journal ID; the removed `HARNESS_JOURNAL` is rejected at startup |
 | `HARNESS_POSTGRES_DSN`, `HARNESS_MONGODB_URI` | Unset | Connection string for the selected teaching CLI journal backend |
 | `HARNESS_TRACE_CONTENT` | `0` | Teaching CLI only: `1` explicitly includes potentially sensitive content in traces |
 
@@ -86,6 +86,15 @@ Use call/tool/time limits, rather than token limits, for scripted demos without 
 
 See the [public API and execution contract](HARNESS_SPEC.md),
 [event guide](HARNESS_EVENTS.md) and [policy guide](TOOL_POLICIES.md).
+
+Related keywords can instead be passed as optional groups from
+[harness/config.py](../harness/config.py): `observability=ObservabilityConfig(...)`
+(trace, event and `quiet` settings), `tool_config=ToolConfig(...)` (approval, policy,
+admission, output limit, timeout, writable roots, worker environment) and
+`context=ContextConfig(...)` (compaction thresholds, session path or store). Each group
+is equivalent to its keywords and validated identically. Combining a group with any of
+its own keywords at a non-default value raises `TypeError`. `ToolConfig(approve=None)`
+selects the default terminal approval, `ask_human`.
 
 ### Isolated tool timeouts
 
@@ -117,14 +126,11 @@ The journal commits action metadata before dispatch and records the outcome afte
 It stores no tool arguments or outputs. Uncertain actions and unfinished runs with
 actions block new tasks before model calls. Keep the same journal across restarts.
 
-Stop affected processes, inspect pending records and verify external effects first:
-
-Use the database-specific `journal inspect` command below.
-
-Only after human verification, replace `ACTION_ID` with the inspected ID and record
-the actual outcome (`completed`, `failed` or `not_run`):
-
-Use the corresponding `journal resolve` command with `--confirm`.
+Stop affected processes, inspect pending records with the database-specific
+`journal inspect` command (see the PostgreSQL and MongoDB sections below) and verify
+external effects first. Only after human verification, record the actual outcome
+(`completed`, `failed` or `not_run`) for the inspected `ACTION_ID` with the
+corresponding `journal resolve` command and `--confirm`.
 
 Resolution never executes tools, restores outputs or repairs the conversation.
 Review saved history before continuing. Journaling is a single-owner recovery
@@ -141,7 +147,7 @@ environment variable that holds the connection string; never pass the string its
 ````sh
 uv sync --extra postgres
 export APP_POSTGRES_DSN='postgresql://app@db.example/app?sslmode=verify-full'
-python -m stores.postgres init --dsn-env APP_POSTGRES_DSN
+python3 -m stores.postgres init --dsn-env APP_POSTGRES_DSN
 ````
 
 ````python
@@ -167,8 +173,8 @@ agent = Agent(model, system, tools=tools, session_store=PostgresSessionStore("us
 - **Recovery** uses the shared journal rules:
 
 ````sh
-python -m stores.postgres journal inspect --dsn-env APP_POSTGRES_DSN --journal-id support-worker --pending
-python -m stores.postgres journal resolve --dsn-env APP_POSTGRES_DSN --journal-id support-worker \
+python3 -m stores.postgres journal inspect --dsn-env APP_POSTGRES_DSN --journal-id support-worker --pending
+python3 -m stores.postgres journal resolve --dsn-env APP_POSTGRES_DSN --journal-id support-worker \
   ACTION_ID --outcome completed --confirm
 ````
 
@@ -185,7 +191,7 @@ use transactions.
 ````sh
 uv sync --extra mongodb
 export APP_MONGODB_URI='mongodb://app@db.example/?replicaSet=rs0&tls=true'
-python -m stores.mongodb init --uri-env APP_MONGODB_URI
+python3 -m stores.mongodb init --uri-env APP_MONGODB_URI
 ````
 
 ````python
@@ -208,7 +214,7 @@ agent = Agent(model, system, tools=tools, session_store=MongoSessionStore("user-
   for up to `transactionLifetimeLimitSeconds` (60 by default). Until then, the session
   still loads its last saved state, but saves to it fail with `SessionStoreError`; the
   same applies to journal writes. Wait, or end the session with `killSessions`.
-- **Recovery:** `python -m stores.mongodb journal inspect|resolve --uri-env NAME
+- **Recovery:** `python3 -m stores.mongodb journal inspect|resolve --uri-env NAME
   --journal-id ID`, with the same output and confirmation as the other journals.
 
 `compose.yaml` also starts a single-node MongoDB 9.0 replica set on `127.0.0.1:57017`.
@@ -406,6 +412,7 @@ python3 -m unittest -v tests.test_learning_capstone
 python3 -m unittest -v tests.test_tool_contracts tests.test_trace_privacy tests.test_support_agent tests.test_runtime_distribution
 python3 -m unittest -v tests.test_support_evaluation
 python3 -m unittest -v tests.test_memory tests.test_storage_conformance
+python3 -m unittest -v tests.test_agent_config tests.test_tool_policy tests.test_harness_events tests.test_storage_memory_workers
 ````
 
 After preparing the full development set, include the installed-data checks with
@@ -416,14 +423,35 @@ importing them does not initialize applications.
 Storage backends share the contract suites in
 [tests/storage_conformance.py](../tests/storage_conformance.py). The PostgreSQL and
 MongoDB tests skip unless the extra is installed and a test database is named; each
-test creates and drops its own schema or database:
+test creates and drops its own schema or database. One command runs them (Docker
+required):
+
+````sh
+uv sync --extra postgres --extra mongodb
+uv run python -m tools.run_storage_tests          # add --down to stop the databases afterwards
+````
+
+It starts the databases with `docker compose up -d --wait` (skip with `--no-start`
+for databases you already run), sets `LITTLE_HARNESS_TEST_POSTGRES_DSN` and
+`LITTLE_HARNESS_TEST_MONGODB_URI` unless already set, and runs
+`tools.check_storage_services`. It then runs `tests.test_storage_conformance`,
+`tests.test_storage_postgres`, `tests.test_storage_mongodb` and
+`tests.test_storage_memory_workers`, failing if any test skips for a missing database
+or driver (by-design capability skips are allowed), followed by the
+full suite unless `--storage-only` is given. `--down` stops the databases afterwards.
+Host ports come from `LITTLE_HARNESS_POSTGRES_PORT` and `LITTLE_HARNESS_MONGODB_PORT`
+(defaults 55432 and 57017), used by both `compose.yaml` and the runner.
+
+Roughly the same steps by hand, with default ports (this does not fail on skips):
 
 ````sh
 docker compose up -d --wait
 uv sync --extra postgres --extra mongodb
 export LITTLE_HARNESS_TEST_POSTGRES_DSN=postgresql://postgres@127.0.0.1:55432/postgres
 export LITTLE_HARNESS_TEST_MONGODB_URI='mongodb://127.0.0.1:57017/?directConnection=true'
-uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres tests.test_storage_mongodb
+uv run python -m tools.check_storage_services
+uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_postgres tests.test_storage_mongodb tests.test_storage_memory_workers
+uv run python -m unittest -q
 ````
 
 The [storage workflow](../.github/workflows/storage.yml) runs them in CI.

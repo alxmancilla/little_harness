@@ -60,6 +60,10 @@ tool functions are bound with `functools.partial`; only `query` or `sku` appears
 in model-visible schemas. Replace the approved documents/catalog for your domain.
 Do not expose credentials, database connections or entire filesystems as arguments.
 
+For long-term memory, pass `memory_store=` with `memory_namespace=` (both or neither),
+or a prebuilt `memory_registry=` instead; `memory_allow_write=False` keeps only `recall`.
+See [long-term memory](REFERENCE.md#long-term-memory-optional).
+
 Tools accept explicitly annotated `str`, `int`, `float` or `bool` parameters,
 including keyword-only parameters. `Literal[...]` limits a parameter to fixed
 string or integer choices that the runtime enforces; `Annotated[type, "text"]`

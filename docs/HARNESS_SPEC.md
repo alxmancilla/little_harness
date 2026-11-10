@@ -1,7 +1,8 @@
 # Little Harness specification
 
-**Status:** as-built specification, revision 5 (separation Phase 4 complete). Describes the current implementation,
-not a promise of unimplemented features. **Runtime:** Python 3.11+, standard library only.
+**Status:** as-built specification, revision 6 (separation Phase 4 complete; covers the package-only API,
+storage/memory (FR-15) and `Agent` configuration groups (FR-16)). Describes the current
+implementation, not a promise of unimplemented features. **Runtime:** Python 3.11+, standard library only.
 
 This document uses specification-driven structure: scope, contracts, numbered
 requirements, invariants and acceptance scenarios. **MUST** denotes a required
@@ -57,6 +58,7 @@ is an execution boundary for timeouts, **not** a security boundary.
 | Interface | Contract |
 | --- | --- |
 | `Agent(model, system, ...)` | Configure conversation, tools and optional controls; no model call at construction |
+| `observability=`, `tool_config=`, `context=` | Optional `ObservabilityConfig`, `ToolConfig`, `ContextConfig` groups of the matching `Agent` keywords, validated identically. A group combined with any of its keywords set to a non-default value raises `TypeError`. `ToolConfig(approve=None)` means the default terminal approval (`ask_human`); by contrast, the plain keyword `Agent(approve=None)` stores `None`, so a risky call then fails when approval is attempted |
 | `Agent.run(task)` | Return display text, including harness warnings/stop messages |
 | `Agent.run_result(task)` | Return immutable structured result for supported outcomes; unexpected programming/I/O failures can propagate |
 | `model(system, messages, tools, on_text=None)` | Return normalized response; optionally deliver provisional text deltas |
@@ -97,9 +99,10 @@ and are not automatically redacted. Do not put secrets in them.
 
 Supported embedding surface (validated by teaching, HotpotQA and inventory clients):
 
-- Import `Agent`, `SessionLoadError`, `ToolRegistry`, `RunLimits`, `RunResult`,
-  `RunUsage`, `RunEvent` and `ToolPolicy` from `harness`; use the documented
-  constructor options and hooks.
+- Import `Agent`, `ObservabilityConfig`, `ToolConfig`, `ContextConfig`,
+  `SessionLoadError`, `ToolRegistry`, `RunLimits`, `RunResult`, `RunUsage`,
+  `RunEvent` and `ToolPolicy` from `harness`; use the documented constructor
+  options, configuration groups and hooks.
 - Public provider exports are `HTTPModel`, `ModelError`, `ModelConfigError`,
   `AnthropicModel`, `OpenAIChatModel`, `OpenAIResponsesModel` and `make_model`.
   Provider selection is explicit; importing the package does not load `.env` or
@@ -114,6 +117,11 @@ Supported embedding surface (validated by teaching, HotpotQA and inventory clien
   and its subclass `SessionConflictError`. Stores must check stored data with
   `validate_session`, and their `str()` must not reveal connection details, because
   it appears in the resume message.
+- Memory exports are `MemoryRecord`, `MemoryStore`, `MemoryStoreError` and
+  `memory_tools` (FR-15).
+- The names above are exactly `harness.__all__`; only they are public. Other
+  importable names, including submodule internals such as `harness.config.merge_group`,
+  are not supported embedding surface.
 - Private methods and internal worker descriptors are implementation details,
   not application extension points. The runtime has no built-in prompts, tools,
   workspace setup, dataset loading or evaluation stages.
@@ -359,6 +367,15 @@ Database stores apply namespace quotas transactionally and never evict on a full
 quota. Namespaces are labels, not authorization. Memory cannot guarantee a model
 will ignore injected instructions. See [storage spec](STORAGE_SPEC.md#33-memorystore-and-memory-tools-in-harnessmemorypy).
 
+### FR-16 — Accept grouped configuration equivalently
+
+`Agent` MAY receive `observability=ObservabilityConfig(...)`, `tool_config=ToolConfig(...)`
+and `context=ContextConfig(...)` instead of the matching individual keywords. A group
+MUST produce the same configuration and validation as the equivalent keywords. Passing
+a group together with one of its keywords set to a non-default value MUST raise
+`TypeError`, as MUST a group of the wrong type. The tool mapping stays `tools=`, and
+`max_steps`/`limits` remain individual keywords.
+
 ## 5. Terminal states and invariants
 
 | Run status | Meaning / representative stop reasons |
@@ -420,12 +437,13 @@ Paths below are relative to `tests/`; scenarios summarize existing regression co
 | AC-07 / FR-06,07 | Isolated tool hangs or loses its result | Stop without retry; uncertain outcome and paired remaining results | `test_tool_execution.py` |
 | AC-08 / FR-08,09 | Process dies around an action/journal commit | Restart blocks before model calls; manual resolution never replays | `test_execution_journal.py`, `journal_crash_worker.py` |
 | AC-09 / FR-11 | Observer raises or attempts payload mutation | Ordinary failure disables observation; immutable payloads protect state | `test_harness_events.py` |
-| AC-10 / FR-12 | Model endpoint redirects or emits diagnostic errors | Redirect blocked; diagnostic content absent from ordinary results/traces | `test_model_clients.py`, `test_mini_harness.py` |
+| AC-10 / FR-12 | Model endpoint redirects (to another origin or the same origin) or emits diagnostic errors | Redirect blocked after one request; diagnostic content absent from ordinary results/traces | `test_model_clients.py`, `test_mini_harness.py` (`test_model_redirects_never_make_a_second_request`) |
+| AC-11 / FR-13 | Malicious text is retrieved from an approved document | Evidence remains data, with corpus/output limits and source metadata | `test_mini_harness.py` |
+| AC-12 / FR-14 | Offline paired evaluation or mismatched reference | Null quality; shared role budgets; mismatch rejected before inference | `test_evaluate_hotpotqa.py`, `test_hotpotqa_multi_agent.py` |
 | AC-13 / FR-12 | The same text, tool-call, stream-failure and HTTP-failure scenarios reach each adapter | Identical normalized responses; identical error categories; no retry after streaming began | `test_mini_harness.py` (`ProviderConformanceTests`) |
 | AC-14 / FR-08,09 | The same session and journal scenarios reach each storage backend | Exact round trips, rewrites before the latest message, invalid data rejected, recovery required after an unfinished action, second writer refused where supported | `test_storage_conformance.py` (`storage_conformance.py` suites) |
 | AC-15 / FR-15 | Scoped memory, denied writes and poisoned recall | Namespace isolation and quota; denied writes create no journal action; recalled text is marked untrusted and omitted from default observations | `test_memory.py`, `test_storage_conformance.py`, `test_support_evaluation.py` |
-| AC-11 / FR-13 | Malicious text is retrieved from an approved document | Evidence remains data, with corpus/output limits and source metadata | `test_mini_harness.py` |
-| AC-12 / FR-14 | Offline paired evaluation or mismatched reference | Null quality; shared role budgets; mismatch rejected before inference | `test_evaluate_hotpotqa.py`, `test_hotpotqa_multi_agent.py` |
+| AC-16 / FR-16 | An `Agent` built from config groups versus the same keywords; a group plus a conflicting keyword | Identical configuration and terminal-approval default; conflicts and wrong group types raise `TypeError`; values still validated | `test_agent_config.py` |
 
 Separation acceptance examples (SEP-01–12) are covered by `test_harness_package.py`
 and `test_harness_separation.py` (copied package, retired-module absence and configured tools),
@@ -439,7 +457,7 @@ Strict registration and trace privacy are covered in `test_tool_contracts.py` an
 `test_trace_privacy.py`. Application-owned answer validation and local runtime
 distribution are covered in `test_support_agent.py` and `test_runtime_distribution.py`.
 
-Run the offline suite with `python3 -m unittest -q`. Installed full-dataset checks
+Run the offline suite with `python -m unittest -q` (Python 3.11+). Installed full-dataset checks
 require prepared data and `HARNESS_TEST_HOTPOTQA_DEV=1`. Unit/smoke success establishes
 mechanics, not real-model prompt-injection resistance or answer accuracy.
 

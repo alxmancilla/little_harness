@@ -11,8 +11,11 @@ application, HotpotQA prompts, tools, datasets or evaluation code. Preserve Pyth
 standard-library-only operation, explicit package APIs, security controls and
 historical artifacts. Do not change `.env`, model settings, prompts or scoring.
 
-Non-goals: a new agent framework, distributed scheduling, parallel tools, database
-memory, a provider rewrite, an OS sandbox or exactly-once external actions.
+Non-goals: a new agent framework, distributed scheduling, parallel tools, a provider
+rewrite, an OS sandbox or exactly-once external actions. (Database memory, originally
+a non-goal, is now provided outside the core: `harness.MemoryStore`/`memory_tools`
+define the interface and the optional `stores/` adapters implement it for PostgreSQL
+and MongoDB; see [storage spec](STORAGE_SPEC.md).)
 
 ## 2. Ownership and dependency direction
 
@@ -27,7 +30,10 @@ The delivered layout has `harness/`, `agents/`, `examples/` and `evaluation/`.
 Names describe ownership, not services or processes. Root aliases/scripts are not supported.
 
 All runtime implementations live in `harness/`. Copying the complete directory is
-supported without any application/root files. Packaging/install metadata is not yet provided.
+supported without any application/root files. `pyproject.toml` provides install
+metadata (no required dependencies; optional `postgres`/`mongodb` extras for `stores/`),
+and `python -m tools.package_runtime --output DIR` builds a standard-library-only wheel
+containing just `harness/` (covered by `tests/test_runtime_distribution.py`).
 `agents/teaching/` owns explicit configuration, tool factories, demos and CLI.
 HotpotQA applications/workflows live under `agents/hotpotqa/`. Host preparation,
 loading, scoring, comparison and runners live under `evaluation/hotpotqa/`. The
@@ -53,10 +59,14 @@ standard library. No runtime/application import depends on evaluation.
 
 `harness.Agent` retains `run()` display text and `run_result()` structured results.
 `tools` is keyword-only and required; tool functions remain trusted Python code.
+`max_steps` defaults to 12 and `limits` (a `RunLimits`) to `None` (no extra budget).
 `max_tool_output` is a positive character cap (default 8000), `compact_at` defaults
 to 40000, optional keyword-only `compact_at_tokens` defaults to `None`, and
 `writable_roots` defaults to an empty tuple. Construction does not
 create those roots. Trace/session/journal I/O retains its existing run-time behavior.
+The same keywords may instead be grouped as `observability=ObservabilityConfig(...)`,
+`tool_config=ToolConfig(...)` and `context=ContextConfig(...)` with identical defaults
+and validation; see [FR-16](HARNESS_SPEC.md#fr-16--accept-grouped-configuration-equivalently).
 
 The explicit tool mapping snapshots membership, not callable state or arbitrary
 trusted registry-entry mutations. Use separate registries and separate agent/model

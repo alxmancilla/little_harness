@@ -133,8 +133,9 @@ product (m02), an unknown product that is then corrected (m03), a constraint sho
 the documented steps already failed (m04), and a follow-up that falsely claims an
 earlier approval (m05). Each scenario keeps **one agent and its history** across
 turns; only each turn's `sku`/`question` enters that history. Every turn is scored
-with the same three checks as a single case, so citations must come from evidence
-retrieved in that turn, not an earlier one. A scenario passes only if every turn
+with three checks (`valid_output`, `escalation_matches_draft`, `required_sources_cited`);
+single cases add a fourth, `memory_exposed`, which multi-turn turns do not use.
+Citations must come from evidence retrieved in that turn, not an earlier one. A scenario passes only if every turn
 passes and the runtime kept every earlier task in history.
 
 Offline, three of five scenarios pass. m04 and m05 fail turn 2 for the same reason

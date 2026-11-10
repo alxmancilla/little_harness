@@ -173,7 +173,7 @@ Gate: SAC-01 to SAC-08 and SAC-13 pass against MongoDB 9.0 in `storage.yml`.
 Gate: SAC-09 to SAC-12 pass on the databases; no memory text in default traces or events.
 The user accepted exceeding the original approximately 2,200-line runtime target.
 
-### Phase 4 checkpoint — implemented locally, revised storage choice
+### Phase 4 checkpoint — complete; revised storage choice; CI passed
 
 - Scoped memory tools, shared conformance tests and support poisoning cases are
   implemented. PostgreSQL and MongoDB provide the durable memory stores; quota checks
@@ -195,6 +195,18 @@ The user accepted exceeding the original approximately 2,200-line runtime target
 
 Gate: SAC-09 to SAC-13 pass on both databases in `storage.yml`.
 The gate passed in CI for commit `bbf7d61`.
+
+### Phase 5 checkpoint — complete
+
+- `stores/memory.py` provides `memory_worker_tools`, so `recall`, `remember` and
+  `forget` run in timed isolated workers that reconnect from a named `worker_env`
+  variable; no connection secret is placed in tool configuration.
+- `PostgresMemoryStore` and `MongoMemoryStore` pass the shared memory conformance
+  suite, including namespace isolation, quota without eviction and purge, plus
+  per-backend concurrent-add quota tests.
+- `tests/test_storage_memory_workers.py` covers worker execution, run IDs and the
+  configured quota against both databases.
+- The gate passed in CI for commit `bbf7d61`.
 
 ## Phase 6 — review and release notes
 
@@ -242,6 +254,31 @@ The gate passed in CI for commit `bbf7d61`.
   a uniquely named PostgreSQL schema and MongoDB database, writes test records, and
   drops those exact temporary resources on completion. An interrupted process or a
   cleanup failure can leave them behind; failures print the generated name for review.
+- CI gate runs on push; result not recorded here. On 2026-11-10 the offline suite
+  (`.venv/bin/python -m unittest -q`, Python 3.11+) ran 561 tests locally: OK, 77
+  skipped (database suites skip without connection variables).
+
+### Release notes
+
+- **Optional extras.** The runtime stays standard-library only. `uv sync --extra
+  postgres --extra mongodb` installs psycopg 3 / PyMongo 4 for the `stores/` adapters;
+  `import harness` never imports them.
+- **Sessions.** `SessionStore` with `SessionFile` (JSON, default) plus PostgreSQL 18
+  and MongoDB 9.0 stores: atomic saves and a single writer per session.
+- **Journals.** Durable action journals on PostgreSQL and MongoDB; an unfinished
+  action blocks restart until a human resolves it. SQLite journals were removed.
+- **Memory.** `MemoryStore`/`memory_tools` with namespace-scoped, quota-bounded,
+  untrusted recall; database stores and timed worker bindings (`memory_worker_tools`).
+- **CLI.** Database-specific journal recovery subcommands with confirmation rules
+  (see [ST-09](STORAGE_SPEC.md#st-09--keep-human-recovery-available)).
+- **Local tooling.** `compose.yaml` services, `tools.check_storage_services`,
+  `tools.benchmark_storage`, and `uv run python -m tools.run_storage_tests`, which
+  mirrors `storage.yml` in one command (start services, check them, run the storage
+  suites without database or driver skips, then the full suite).
+- **Known limits.** Memory search and MongoDB journal pending inspection are
+  unbounded scans of matching candidates/unresolved actions; there is no vector or
+  semantic search; namespaces are labels, not access control; deleted memories may
+  persist in sessions or backups.
 
 ## Risks
 
