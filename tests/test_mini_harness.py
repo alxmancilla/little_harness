@@ -852,6 +852,7 @@ class HTTPTests(unittest.TestCase):
 
     def test_model_redirects_never_make_a_second_request(self):
         requests = []
+        location = []
 
         class RedirectServer(urllib.request.BaseHandler):
             handler_order = 100  # intercept before the real HTTP(S) handlers; no sockets are used
@@ -859,19 +860,22 @@ class HTTPTests(unittest.TestCase):
             def https_open(self, req):
                 requests.append(req)
                 headers = Message()
-                headers["Location"] = "https://different.example.invalid/receive"
+                headers["Location"] = location[0]
                 response = urllib.response.addinfourl(io.BytesIO(b"diagnostics"), headers, req.full_url, 302)
                 response.msg = "Found"
                 return response
 
-        for key_header in (None, "x-api-key"):
-            with self.subTest(key_header=key_header):
-                requests.clear()
-                model = clients.OpenAIResponsesModel("m", key="test-key", key_header=key_header)
-                model._opener.add_handler(RedirectServer())
-                with self.assertRaisesRegex(h.ModelError, "^API error 302$"):
-                    model("sys", [], [])
-                self.assertEqual(len(requests), 1)
+        same_origin = clients.OpenAIResponsesModel("m", key="k").base_url + "/elsewhere"
+        for target in ("https://different.example.invalid/receive", same_origin):
+            for key_header in (None, "x-api-key"):
+                with self.subTest(target=target, key_header=key_header):
+                    requests.clear()
+                    location[:] = [target]
+                    model = clients.OpenAIResponsesModel("m", key="test-key", key_header=key_header)
+                    model._opener.add_handler(RedirectServer())
+                    with self.assertRaisesRegex(h.ModelError, "^API error 302$"):
+                        model("sys", [], [])
+                    self.assertEqual(len(requests), 1)
 
     def test_provider_diagnostics_are_not_written_by_the_normal_agent(self):
         marker = "PUBLIC-DIAGNOSTIC-MARKER"

@@ -9,11 +9,12 @@ from .policy import ToolPolicy
 from .memory import MemoryRecord, MemoryStore, MemoryStoreError, memory_tools
 
 from .agent import Agent
+from .config import ContextConfig, ObservabilityConfig, ToolConfig
 from .session import (SessionConflictError, SessionFile, SessionLoadError, SessionStore, SessionStoreError,
                       validate_session)
 from .tools import ToolRegistry, validate_tool_input
 
-__all__ = ["Agent", "SessionLoadError", "ToolRegistry", "RunLimits", "RunResult", "RunUsage", "RunEvent",
+__all__ = ["Agent", "ObservabilityConfig", "ToolConfig", "ContextConfig", "SessionLoadError", "ToolRegistry", "RunLimits", "RunResult", "RunUsage", "RunEvent",
            "SessionStore", "SessionFile", "SessionStoreError", "SessionConflictError", "validate_session",
            "MemoryRecord", "MemoryStore", "MemoryStoreError", "memory_tools",
            "ToolPolicy", "ActionJournal", "JournalError", "JournalRecoveryRequired",

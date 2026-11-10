@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
+from .config import ContextConfig, ObservabilityConfig, ToolConfig, merge_group
 from .journal import ActionJournal, JournalError
 from .events import RunEvent
 from .runtime import BudgetExceeded, ExecutionBudget, RunLimits, RunResult
@@ -100,6 +101,13 @@ def _check_response(response):
             ids.add(block["id"])
 
 
+_OBSERVABILITY_DEFAULTS = dict(trace_path="trace.jsonl", trace_context=None, trace_include_content=False,
+                               on_event=None, event_include_content=False, quiet=False)
+_TOOL_DEFAULTS = dict(approve=ask_human, tool_policy=None, tool_admission=None, max_tool_output=8000,
+                      tool_timeout_seconds=None, writable_roots=(), worker_env=None)
+_CONTEXT_DEFAULTS = dict(compact_at=40000, compact_at_tokens=None, session_path=None, session_store=None)
+
+
 def render_transcript(messages, clip=1000):
     """Flatten/clamp content for summaries while preserving tool/result labels."""
     lines = []
@@ -134,6 +142,9 @@ class Agent:
     copy of os.environ. Inline tools still see the parent environment. It is not a sandbox.
     session_store and journal accept any SessionStore or ActionJournal; session_store
     is an alternative to session_path.
+    observability, tool_config and context optionally group the matching keyword
+    arguments (ObservabilityConfig, ToolConfig, ContextConfig); a group cannot be
+    combined with any of its keyword arguments set to a non-default value.
     """
 
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
@@ -141,13 +152,25 @@ class Agent:
                  on_event=None, event_include_content=False, quiet=False, tool_policy=None,
                  writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
                  trace_include_content=False, compact_at_tokens=None, get_steering=None, worker_env=None,
-                 session_store=None, journal=None):
+                 session_store=None, journal=None, observability=None, tool_config=None, context=None):
         self.model, self.system, self.max_steps = model, system, max_steps
-        self._configure_observability(trace_path, trace_context, trace_include_content,
-                                      on_event, event_include_content, quiet)
-        self._configure_tools(tools, tool_policy, tool_admission, approve,
-                              max_tool_output, tool_timeout_seconds, writable_roots, worker_env)
-        self._configure_context(compact_at, compact_at_tokens, session_path, session_store)
+        obs = merge_group("observability", observability, ObservabilityConfig, dict(
+            trace_path=trace_path, trace_context=trace_context, trace_include_content=trace_include_content,
+            on_event=on_event, event_include_content=event_include_content, quiet=quiet), _OBSERVABILITY_DEFAULTS)
+        tc = merge_group("tool_config", tool_config, ToolConfig, dict(
+            approve=approve, tool_policy=tool_policy, tool_admission=tool_admission,
+            max_tool_output=max_tool_output, tool_timeout_seconds=tool_timeout_seconds,
+            writable_roots=writable_roots, worker_env=worker_env), _TOOL_DEFAULTS)
+        ctx = merge_group("context", context, ContextConfig, dict(
+            compact_at=compact_at, compact_at_tokens=compact_at_tokens,
+            session_path=session_path, session_store=session_store), _CONTEXT_DEFAULTS)
+        self._configure_observability(obs["trace_path"], obs["trace_context"], obs["trace_include_content"],
+                                      obs["on_event"], obs["event_include_content"], obs["quiet"])
+        self._configure_tools(tools, tc["tool_policy"], tc["tool_admission"], tc["approve"],
+                              tc["max_tool_output"], tc["tool_timeout_seconds"], tc["writable_roots"],
+                              tc["worker_env"])
+        self._configure_context(ctx["compact_at"], ctx["compact_at_tokens"], ctx["session_path"],
+                                ctx["session_store"])
         self._configure_controls(limits, get_steering, journal)
         # Per-run state, reset by run_result().
         self._budget = None
