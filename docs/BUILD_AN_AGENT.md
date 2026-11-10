@@ -165,7 +165,7 @@ These deterministic tests establish contracts, not general answer quality. For l
 evaluation, review a small domain-approved set for factual correctness, escalation,
 citation support and action safety; do not treat scripted answers as ground truth.
 
-The [support evaluation workflow](SUPPORT_EVALUATION.md) provides fifteen explicitly
+The [support evaluation workflow](SUPPORT_EVALUATION.md) provides seventeen explicitly
 unreviewed synthetic draft cases, an offline-first runner, bounded live opt-in,
 mechanical checks, resource reporting and an unscored human-review worksheet.
 Run `python3 -m evaluation.support.evaluate --output runs/support-smoke-01`.

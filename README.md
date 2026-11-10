@@ -162,8 +162,8 @@ coroutines and generators are unsupported. Return annotations are not output sch
 
 Use `risky=True` to require approval. `read_only=True` is a separate trusted
 declaration, not something inferred from a tool's name or lack of approval.
-Use separate registries, agents and trace/session/journal paths for independent
-applications. One agent supports sequential tasks, not overlapping runs.
+Use separate registries, agents, trace/session storage and database journal IDs for
+independent applications. One agent supports sequential tasks, not overlapping runs.
 
 For a complete tool-using example, read [inventory_agent.py](examples/inventory_agent.py).
 Try its isolated-worker path with `python3 -m examples.inventory_agent --sku GADGET --tool-timeout 3`.
