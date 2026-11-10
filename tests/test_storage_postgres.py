@@ -265,6 +265,13 @@ class PostgresFailureTests(TemporaryDirectoryTestCase):
             with self.subTest(name=name, options=options), self.assertRaises(ValueError):
                 PostgresJournal(name, dsn_env="LH_UNREACHABLE_DSN", **options)
 
+    def test_statement_timeout_cannot_round_down_to_disabled(self):
+        for adapter in (PostgresSessionStore, PostgresJournal, PostgresMemoryStore):
+            with self.subTest(adapter=adapter.__name__), self.assertRaises(ValueError):
+                adapter("x", dsn_env="LH_UNREACHABLE_DSN", statement_timeout=0.0009)
+            store = adapter("x", dsn_env="LH_UNREACHABLE_DSN", statement_timeout=0.001)
+            self.assertEqual(store._timeout_ms, "1")
+
 
 @unittest.skipIf(postgres.psycopg is not None, "the postgres extra is installed")
 class MissingDriverTests(unittest.TestCase):

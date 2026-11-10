@@ -133,7 +133,7 @@ aid, not a distributed scheduler or an exactly-once guarantee.
 ### PostgreSQL sessions and journals (optional)
 
 `stores.postgres` provides `PostgresSessionStore` and `PostgresJournal` for
-PostgreSQL 18, passed as `session_store=` and `journal=`. They keep the file
+PostgreSQL 18, passed as `session_store=` and `journal=`. They implement the
 session and journal contracts and add a check against a second session writer
 ([storage specification](STORAGE_SPEC.md)). Install the driver, then name the
 environment variable that holds the connection string; never pass the string itself:
@@ -157,9 +157,11 @@ agent = Agent(model, system, tools=tools, session_store=PostgresSessionStore("us
   record, or with another version, are never adopted.
 - **Least privilege.** After `init`, the application's role needs only `USAGE` on
   the schema and `SELECT`, `INSERT`, `UPDATE` and `DELETE` on its tables.
-- **Connections.** Use TLS (`sslmode=verify-full`). Connecting is limited to 10
-  seconds and each statement to 5 (`statement_timeout=`). Every write commits
-  synchronously. Errors carry fixed messages, never the driver's text.
+- **Connections.** Use TLS (`sslmode=verify-full`). The built-in connection uses a
+  10-second connect timeout and a 5-second per-statement timeout by default
+  (`statement_timeout=`, minimum 0.001 seconds). This is not a whole-operation
+  deadline; a supplied `connect=` factory must bound its own connection setup. Every
+  write commits synchronously. Driver errors carry fixed messages, never driver text.
 - **One writer per session.** A second agent saving the same session ID gets
   `SessionConflictError`, and the first agent's save is kept.
 - **Recovery** uses the shared journal rules:
@@ -200,7 +202,8 @@ agent = Agent(model, system, tools=tools, session_store=MongoSessionStore("user-
   that database.
 - **Connections.** Use TLS. Connecting is limited to 10 seconds and each operation to
   5 (`timeout=`); writes are acknowledged by a majority and journaled. One client is
-  shared per connection string; pass `client=` to use your own `MongoClient`.
+  shared per connection string; pass `client=` to use your own `MongoClient` with
+  suitable connection settings.
 - **After a crash mid-save.** The dead process's transaction stays open on the server
   for up to `transactionLifetimeLimitSeconds` (60 by default). Until then, the session
   still loads its last saved state, but saves to it fail with `SessionStoreError`; the
@@ -424,4 +427,6 @@ uv run python -m unittest -v tests.test_storage_conformance tests.test_storage_p
 ````
 
 The [storage workflow](../.github/workflows/storage.yml) runs them in CI.
+The [storage plan](STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements)
+records a small reproducible local latency probe and its limitations.
 

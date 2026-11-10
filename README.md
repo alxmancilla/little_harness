@@ -79,6 +79,7 @@ environment or `.env`.
 | Location | Responsibility |
 | --- | --- |
 | [harness/](harness/) | Reusable loop, tool registry, provider clients, budgets, events, policies, workers and storage interfaces |
+| [stores/](stores/) | Optional PostgreSQL and MongoDB session, journal and memory adapters |
 | [agents/teaching/](agents/teaching/) | Teaching tools, explicit configuration, factories, scripted demos and CLI |
 | [agents/hotpotqa/](agents/hotpotqa/) | Restricted question-answering tools, single-agent and researcher/reviewer workflows, shared worker helpers |
 | [evaluation/hotpotqa/](evaluation/hotpotqa/) | Dataset preparation, per-question execution, host-only scoring and comparisons |
@@ -187,7 +188,7 @@ can incur costs. This example never loads `.env`. Optional `--save-draft PATH`
 asks for human approval after validation, never overwrites and never sends anything.
 Data and policies are fictional; scripted success is not an accuracy evaluation.
 
-Next, [evaluate the support assistant](docs/SUPPORT_EVALUATION.md) with fifteen
+Next, [evaluate the support assistant](docs/SUPPORT_EVALUATION.md) with seventeen
 synthetic draft cases: `python3 -m evaluation.support.evaluate --output runs/support-smoke-01`.
 To score whole conversations (follow-ups, corrections, added constraints), run the five
 multi-turn scenarios: `python3 -m evaluation.support.multiturn --output runs/support-multiturn-01`.
@@ -204,6 +205,17 @@ session persistence (`session_path=` or `session_store=`) and between-step steer
 See the [execution controls reference](docs/REFERENCE.md#execution-controls),
 including [isolated tool timeouts](docs/REFERENCE.md#isolated-tool-timeouts) and
 [recovery without replaying](docs/REFERENCE.md#recover-without-replaying).
+
+### Optional database storage and memory
+
+PostgreSQL and MongoDB adapters provide durable sessions, action journals and
+namespace-scoped long-term memory. Install only the required optional driver and
+configure the database explicitly; offline examples still need neither. Memory is
+untrusted data, not an instruction or an access-control boundary. Memory writes
+use the ordinary risky-tool policy and approval gates. Timed memory tools reconnect
+inside workers; a timed-out write may have succeeded and must not be retried blindly.
+See [setup, recovery and memory](docs/REFERENCE.md#postgresql-sessions-and-journals-optional)
+and the [local operation measurements](docs/STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements).
 
 ## Teaching tools, retrieval and evaluation
 

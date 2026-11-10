@@ -87,8 +87,8 @@ class _PostgresStorage:
             raise ValueError(f"environment variable {dsn_env} is not set")
         if type(schema) is not str or not SCHEMA_NAME.fullmatch(schema):
             raise ValueError("schema must be a lower-case SQL identifier")
-        if type(statement_timeout) not in (int, float) or not 0 < statement_timeout <= 300:
-            raise ValueError("statement_timeout must be between 0 and 300 seconds")
+        if type(statement_timeout) not in (int, float) or not 0.001 <= statement_timeout <= 300:
+            raise ValueError("statement_timeout must be between 0.001 and 300 seconds")
         self.name, self.schema, self._dsn_env, self._connect = name, schema, dsn_env, connect
         self._timeout_ms = str(int(statement_timeout * 1000))
         self._ready = False

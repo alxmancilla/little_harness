@@ -1,7 +1,7 @@
 # Little Harness storage specification
 
-**Status:** interfaces, PostgreSQL and MongoDB session, journal and memory adapters,
-and inline and timed memory tools are implemented. See also the
+**Status: as-built** for the delivered storage interfaces, PostgreSQL and MongoDB
+session, journal and memory adapters, and inline and timed memory tools. See also the
 [harness specification](HARNESS_SPEC.md). **Targets:** Python 3.11+,
 PostgreSQL 18, MongoDB 9.0 (replica set), psycopg 3.3, PyMongo 4.19.
 
@@ -29,8 +29,9 @@ Applications can keep three kinds of data outside local files:
 
 ### Non-goals
 
-- Several processes driving one session or journal at once. Stores detect this and
-  fail; they do not coordinate it.
+- Several processes driving one session or journal at once. Database stores reject
+  conflicting writes; `SessionFile` assumes a single writer without detecting conflicts.
+  The stores do not coordinate agents.
 - One transaction spanning session, journal and memory, even in one database.
 - Embeddings, vector search or automatic memory extraction (possible later revision).
 - Memory added to the prompt without a tool call, or summaries written to memory
@@ -43,7 +44,7 @@ Applications can keep three kinds of data outside local files:
 ## 2. Vocabulary and boundaries
 
 - **Backend:** `file` for sessions (standard library, in `harness/`); `postgres` and
-  `mongodb` for sessions, journals and memory (in `stores/`, importing drivers lazily).
+  `mongodb` for sessions, journals and memory (in optional `stores/` modules).
 - **Session ID / journal ID:** application-chosen strings (1–200 characters,
   `[A-Za-z0-9._:-]`) naming one session or one journal inside a database. They play
   the role the file path plays today.
@@ -117,10 +118,11 @@ not the model. The private worker protocol carries the current run ID and output
 
 ### ST-01 — Keep the core standard-library only
 
-`import harness` MUST NOT import `psycopg`, `pymongo` or `stores`. Adapters MUST
-import their driver only when constructed, and fail with a clear `ImportError`
-naming the missing optional dependency. Existing defaults, file formats and the
-2,000-line scale of `harness/` are preserved; adapters do not count toward it.
+`import harness` MUST NOT import `psycopg`, `pymongo` or `stores`. An adapter module
+attempts to import its driver when that module is imported; constructing an adapter
+without it raises a clear `ImportError` naming the missing optional dependency.
+Existing defaults, file formats and the roughly 2,000-line scale of `harness/` are
+preserved; the larger runtime was accepted in Phase 4 and adapters do not count toward it.
 
 ### ST-02 — Save sessions atomically, with one writer
 
@@ -149,12 +151,14 @@ Each journal MUST meet FR-08 exactly:
   does not return, the tool does not run.
 - Checking for blocking records and inserting the new one happen in one serialized
   transaction, so two concurrent `begin` calls cannot both pass the check.
-- `finish`, `close_run` and `resolve` are durable, single-record transitions that
-  fail when the record is not in the expected state.
+- `finish` and `resolve` are durable transitions that reject an action not in the
+  expected state. `close_run` is durable and may be a no-op for an absent or already
+  closed run, including a run with no journaled actions.
 - No arguments, outputs, exception details or credentials are stored.
 - A journal never adopts storage with an unknown owner or a newer schema version.
-- `inspect` is read-only and bounded; `resolve` requires confirmation and never runs
-  a tool.
+- `inspect` is read-only and returns at most the requested limit; `resolve` requires
+  confirmation and never runs a tool. MongoDB pending inspection and `begin` may
+  examine all unresolved actions, so their internal work is not bounded by that limit.
 
 ### ST-04 — Bound and scope memory
 
@@ -163,9 +167,10 @@ Each journal MUST meet FR-08 exactly:
 - `text` MUST be 1–2,000 characters; `query` 1–500; `limit` 1–20 for `search` and
   1–1,000 for `list`. A namespace holds at most 10,000 records by default
   (configurable). `add` beyond the quota MUST fail without evicting anything.
-- `search` MUST be lexical: it returns records sharing at least one word with the
+- `search` MUST be lexical: it returns records sharing at least one ASCII word with the
   query, best matches first; ties go to newer records, then to `memory_id`. Ranking
-  details may differ between backends; membership and limits may not.
+  details may differ between backends; membership and limits may not. Both adapters
+  fetch and rank all matching candidates before applying the output limit.
 - `delete` and `purge` MUST remove text from the store, not only hide it.
 
 ### ST-05 — Present memory to the model as untrusted evidence
@@ -196,21 +201,25 @@ Each journal MUST meet FR-08 exactly:
 
 ### ST-07 — Handle connections and secrets safely
 
-- Adapters accept either an application-created connection pool or client, or the
-  *name* of an environment variable holding the DSN or URI. They never accept a
-  connection string as a command-line argument.
+- PostgreSQL accepts an application-supplied connection factory or the *name* of a
+  DSN environment variable; MongoDB accepts a client or the *name* of a URI variable.
+  Commands never accept connection strings as command-line arguments.
 - Driver errors MUST be mapped to `SessionStoreError`, `JournalError` or
   `MemoryStoreError` with fixed messages, never the driver's text (which can include
   hosts, user names or query fragments).
-- Every operation MUST be time-bounded: connect at most 10 seconds and each statement
-  or command at most 5 seconds by default, configurable. Retries happen only where
-  section 5 allows them.
+- The built-in PostgreSQL connection uses a 10-second connect timeout and a 5-second
+  per-statement timeout by default (configurable, minimum one millisecond). This is not
+  a whole-operation deadline; application-supplied connection factories must bound
+  their own connection setup. MongoDB uses 10-second connection settings and a
+  configurable 5-second operation timeout by default; supplied clients need appropriate
+  connection settings. Retries happen only where section 5 allows them.
 - Documentation MUST describe a least-privilege role (data access only) and TLS.
 
 ### ST-08 — Prove each backend with the same tests
 
-- One conformance suite per interface runs against every backend. The standard-library
-  backends always run.
+- The session conformance suite runs against `SessionFile` and both database adapters;
+  journal and memory conformance suites run against both database adapters. Offline
+  tests use non-durable fakes where needed and can run without database drivers.
 - PostgreSQL and MongoDB runs happen only when `LITTLE_HARNESS_TEST_POSTGRES_DSN` or
   `LITTLE_HARNESS_TEST_MONGODB_URI` is set. Each test uses unique IDs and cleans up.
 - `python3 -m unittest` stays offline and dependency-free. A separate CI job runs
@@ -220,8 +229,7 @@ Each journal MUST meet FR-08 exactly:
 
 ### ST-09 — Keep human recovery available
 
-`python3 -m harness.journal inspect|resolve PATH` is unchanged. Database journals
-get the same subcommands with the same output and confirmation rules:
+Journal recovery uses the database-specific subcommands and confirmation rules:
 `python -m stores.postgres journal inspect --dsn-env NAME --journal-id ID`, and the
 `stores.mongodb` equivalent.
 
@@ -256,7 +264,8 @@ get the same subcommands with the same output and confirmation rules:
 
 ## 6. Acceptance scenarios
 
-Each scenario runs against every backend through the conformance suites (ST-08).
+The shared suites and backend-specific tests cover these scenarios where applicable
+(ST-08); file sessions do not implement journals, memory or conflict detection.
 
 | ID / requirement | Scenario | Expected |
 | --- | --- | --- |

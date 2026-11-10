@@ -5,8 +5,9 @@ checkpoint with its own gate. Historical checkpoints below describe the decision
 at the time; the current PostgreSQL/MongoDB-only journal and memory design supersedes
 their SQLite references. Session JSON remains supported.
 
-**Current state: Phases 0–4 implemented; database memory adapters implemented early.**
-Timed memory workers and release review remain. Python 3.11+ is in place.
+**Current state: Phases 0–6 implemented and reviewed.** PostgreSQL and MongoDB
+provide durable journals and memory; Python 3.11+ and timed memory workers are in place.
+Phase 6 changes have passed locally; their CI gate runs on push.
 
 Every gate includes: `python3 -m unittest -q` offline on Python 3.11 and 3.14 with no
 third-party packages installed, CI green on 3.11–3.14, docs updated with the code,
@@ -193,6 +194,7 @@ The user accepted exceeding the original approximately 2,200-line runtime target
    memory tools; the worker reconnects using the named variable in `worker_env`.
 
 Gate: SAC-09 to SAC-13 pass on both databases in `storage.yml`.
+The gate passed in CI for commit `bbf7d61`.
 
 ## Phase 6 — review and release notes
 
@@ -201,6 +203,45 @@ Gate: SAC-09 to SAC-13 pass on both databases in `storage.yml`.
 2. Update `README.md` (optional controls, further reading) and the blog post if wanted.
 3. Record measured overhead per save, `begin` and `search` on both databases, as
    information rather than a guarantee.
+
+### Phase 6 checkpoint — review and measurements
+
+- Reviewed [STORAGE_SPEC](STORAGE_SPEC.md) against the adapters and conformance tests;
+  corrected stale claims about file journals, driver imports, timeouts and bounded work.
+  The PostgreSQL adapters now reject sub-millisecond statement timeouts instead of
+  rounding them to zero, which would disable the server timeout.
+- Updated the README and reference for optional database storage. The locally ignored
+  blog draft was also updated for storage and Python 3.11+; it is not tracked by Git.
+- On 2026-11-06, a single local probe measured **whole operation wall time**, not
+  incremental overhead over a no-storage baseline:
+
+  | Backend | Durable session save median / p95 | Journal `begin` median / p95 | Memory `search` median / p95 |
+  | --- | ---: | ---: | ---: |
+  | PostgreSQL 18.6 | 4.38 / 5.15 ms | 4.59 / 5.44 ms | 3.09 / 4.03 ms |
+  | MongoDB 9.0.4 | 1.85 / 3.00 ms | 2.91 / 4.37 ms | 1.11 / 1.76 ms |
+
+  Conditions: macOS arm64, Python 3.14.10, psycopg 3.3.8 and PyMongo 4.19.0;
+  local Docker Compose services over loopback, Docker allocated 14 CPUs and about
+  7.75 GiB RAM. Each backend ran alone, with 10 warm-ups and 100 sequential samples;
+  p95 is the nearest-rank 95th percentile. A prepared 10-message session rewrote its
+  last message on each durable save. One journal run accumulated 110 actions; only
+  `begin` was timed, with `finish` between samples and `close_run` after. Memory held
+  100 records; 10 matched the query and 5 were returned. Setup, schema creation,
+  seeding, journal finish and cleanup are excluded. PostgreSQL opened a connection
+  per operation; MongoDB reused one client. No timed worker startup was included.
+
+  This is a small, single-run local observation, not a capacity test, comparison
+  under equivalent connection management, production estimate or guarantee. Network,
+  concurrency, history sizes, database configuration and candidate counts change
+  results. Both stores load all matching memory candidates before ranking; MongoDB
+  journal `begin` and pending inspection may scan all unresolved journal actions.
+
+  To repeat, start the local test services and set both test connection variables as
+  in the [test reference](REFERENCE.md#tests), then run `uv run python -m
+  tools.benchmark_storage`. Use **disposable test services only**: the probe creates
+  a uniquely named PostgreSQL schema and MongoDB database, writes test records, and
+  drops those exact temporary resources on completion. An interrupted process or a
+  cleanup failure can leave them behind; failures print the generated name for review.
 
 ## Risks
 
