@@ -154,6 +154,8 @@ class AnthropicModel(HTTPModel):
         """Fold a stream of events back into the same dict a non-streaming call returns."""
         msg, blocks, partial_json, done, truncated = {}, {}, {}, False, []
         for _, data in sse_events(lines):
+            if data.strip() == "[DONE]":                        # OpenAI-style sentinel some gateways append
+                continue
             ev = json.loads(data)
             kind = ev["type"]
             if kind == "message_start":
@@ -237,6 +239,8 @@ class OpenAIResponsesModel(HTTPModel):
         """Print text deltas as they arrive, then parse the full response sent with the final event."""
         final = None
         for _, data in sse_events(lines):
+            if data.strip() == "[DONE]":                        # sentinel some gateways append
+                continue
             ev = json.loads(data)
             kind = ev.get("type")
             if kind == "response.output_text.delta":

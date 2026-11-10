@@ -619,6 +619,17 @@ class AnthropicStreamTests(unittest.TestCase):
         self.assertEqual(resp["truncated_tool_ids"], ["t1"])
         self.assertEqual(resp["content"][0]["input"], {})
 
+    def test_trailing_done_sentinel_from_gateways_is_ignored(self):
+        resp = self.read(
+            {"type": "message_start", "message": {}},
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hi"}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_details": None}},
+            {"type": "message_stop"}, "[DONE]")
+        self.assertEqual(resp["content"], [{"type": "text", "text": "Hi"}])
+        self.assertEqual(resp["stop_reason"], "end_turn")
+
     def test_error_event_and_missing_message_stop_raise(self):
         with self.assertRaisesRegex(h.ModelError, "stream reported an error"):
             self.read({"type": "error", "error": {"type": "overloaded_error"}})
@@ -646,6 +657,13 @@ class ResponsesTests(unittest.TestCase):
             {"type": "function_call", "call_id": "c1", "name": "calculator", "arguments": '{"expression": "2+2"}'},
             {"type": "function_call_output", "call_id": "c1", "output": "Error: bad input"},
             {"role": "user", "content": "also explain"}])
+
+    def test_trailing_done_sentinel_from_gateways_is_ignored(self):
+        final = {"status": "completed", "output": [
+            {"type": "message", "content": [{"type": "output_text", "text": "Hi"}]}]}
+        resp = clients.OpenAIResponsesModel("m")._read_stream(sse_lines(
+            {"type": "response.completed", "response": final}, "[DONE]"))
+        self.assertEqual(resp["content"], [{"type": "text", "text": "Hi"}])
 
     def test_stream_prints_deltas_and_parses_final_response(self):
         final = {"status": "completed", "usage": {"input_tokens": 11, "output_tokens": 7}, "output": [
