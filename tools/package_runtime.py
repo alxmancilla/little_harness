@@ -27,9 +27,12 @@ def build_wheel(output):
     if not (runtime / "__init__.py").is_file() or any(path.is_symlink() for path in paths):
         raise ValueError("expected a regular harness source package")
     files = {"harness/" + path.relative_to(runtime).as_posix(): path.read_bytes() for path in paths}
+    files[DIST_INFO + "/licenses/LICENSE"] = (runtime.parent / "LICENSE").read_bytes()
     files[DIST_INFO + "/METADATA"] = (
-        f"Metadata-Version: 2.1\nName: little-harness\nVersion: {VERSION}\n"
+        f"Metadata-Version: 2.4\nName: little-harness\nVersion: {VERSION}\n"
         f"Summary: {PROJECT['project']['description']}\n"
+        f"License-Expression: {PROJECT['project']['license']}\n"
+        f"License-File: LICENSE\n"
         f"Requires-Python: {PROJECT['project']['requires-python']}\n\n"
     ).encode("utf-8")
     files[DIST_INFO + "/WHEEL"] = (

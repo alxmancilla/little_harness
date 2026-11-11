@@ -159,8 +159,8 @@ Use your own virtual environment for installation. The builder packages only run
 Python source and wheel metadata, records file hashes and refuses overwrites. It
 does not require a build backend or third-party build packages. Labs, application
 examples, datasets and secrets are excluded. This is a local distribution utility,
-not a release/publishing system; choose a license before public redistribution and
-update its version before publishing a changed release. The import remains `harness`.
+not a release/publishing system; the wheel includes the MIT `LICENSE`. Update its
+version before publishing a changed release. The import remains `harness`.
 
 ## Evaluate the application, not only the loop
 

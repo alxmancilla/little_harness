@@ -17,9 +17,12 @@ class RuntimeDistributionTests(TemporaryDirectoryTestCase):
             names = set(archive.namelist())
             source_names = {"harness/" + path.relative_to(REPO / "harness").as_posix()
                             for path in (REPO / "harness").rglob("*.py")}
-            self.assertEqual(names, source_names | {DIST_INFO + "/" + name for name in ("METADATA", "WHEEL", "RECORD")})
+            self.assertEqual(names, source_names | {DIST_INFO + "/" + name for name in
+                                                    ("METADATA", "WHEEL", "RECORD", "licenses/LICENSE")})
+            self.assertEqual(archive.read(DIST_INFO + "/licenses/LICENSE"), (REPO / "LICENSE").read_bytes())
             metadata = archive.read(DIST_INFO + "/METADATA").decode()
             self.assertIn("Requires-Python: >=3.11", metadata)
+            self.assertIn("License-Expression: MIT", metadata)
             self.assertNotIn("Requires-Dist:", metadata)
             rows = list(csv.reader(io.StringIO(archive.read(DIST_INFO + "/RECORD").decode())))
             self.assertEqual({row[0] for row in rows}, names)
