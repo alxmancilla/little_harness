@@ -218,9 +218,12 @@ class Agent(CompactionMixin, ToolDispatchMixin):
             event = RunEvent(self._event_run_id, self._event_sequence, kind,
                              datetime.now(timezone.utc).isoformat(), data)
             self.on_event(event)
-        except Exception:
-            # No exception details are printed, traced or added to model context.
+        except Exception as e:
+            # Nothing is printed or added to model context; the trace records that the
+            # observer was disabled, with the exception type as opt-in content.
             self.event_callback_failed = True
+            self._trace("event_callback_failed", event_kind=kind,
+                        content_fields={"error": type(e).__name__})
         except BaseException:
             self.event_callback_failed = True
             raise

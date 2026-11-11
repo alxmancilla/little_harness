@@ -200,6 +200,9 @@ class EventTests(f.HarnessTestCase):
                 self.assertEqual(received[-1].kind, phase)
                 self.assertEqual(agent.journal.inspect(pending_only=True), [])
                 self.assertNotIn("synthetic-private-listener-error", self.trace.read_text())
+                disabled = [r for r in self.trace_records() if r["kind"] == "event_callback_failed"]
+                self.assertEqual((disabled[-1]["event_kind"], disabled[-1].get("error")),
+                                 (phase, "ValueError"))
 
     def test_callback_is_reenabled_next_run_and_reentrant_runs_are_rejected(self):
         calls = []

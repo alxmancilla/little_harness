@@ -306,7 +306,8 @@ therefore grow without bound even though each model request stays bounded.
 Opt-in callbacks MUST receive versioned immutable events, increasing sequence numbers
 and a new run ID per task. Default payloads MUST omit content; explicit content opt-in
 MAY include sensitive text/arguments/results. Ordinary callback exceptions MUST disable
-that run's observer and set `event_callback_failed`, not authorize or retry tools.
+that run's observer, set `event_callback_failed` and write an `event_callback_failed`
+trace record (exception type name only with trace content), not authorize or retry tools.
 `BaseException` propagates; Ctrl+C uses cancellation cleanup. See [event details](HARNESS_EVENTS.md).
 
 JSONL traces MUST independently default to metadata-only: task/model/tool content,

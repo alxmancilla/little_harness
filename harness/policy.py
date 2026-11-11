@@ -10,6 +10,7 @@ from types import MappingProxyType
 class PolicyDecision:
     allowed: bool
     reason: str
+    error: str = None  # Failing exception type name; never the message.
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,6 @@ class ToolPolicy:
             return PolicyDecision(True, "allowed")
         try:
             allowed = predicate(self.snapshot(arguments)) is True
-        except Exception:
-            return PolicyDecision(False, "policy_error")
+        except Exception as e:
+            return PolicyDecision(False, "policy_error", type(e).__name__)
         return PolicyDecision(allowed, "allowed" if allowed else "argument_rejected")

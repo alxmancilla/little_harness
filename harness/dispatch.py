@@ -84,10 +84,11 @@ class ToolDispatchMixin:
         try:
             args = self.tool_policy.snapshot(args)
             decision = self.tool_policy.check(name, args, declared_read_only=entry.get("read_only"))
-        except Exception:
-            decision = PolicyDecision(False, "policy_error")
+        except Exception as e:
+            decision = PolicyDecision(False, "policy_error", type(e).__name__)
         self._trace("tool_policy", name=name, tool_use_id=call.get("id"),
-                    allowed=decision.allowed, reason=decision.reason)
+                    allowed=decision.allowed, reason=decision.reason,
+                    content_fields=None if decision.error is None else {"error": decision.error})
         self._emit("tool_policy", name=name, tool_call_id=call.get("id"),
                    allowed=decision.allowed, reason=decision.reason)
         if not decision.allowed:

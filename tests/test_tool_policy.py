@@ -171,6 +171,20 @@ class PolicyTests(f.HarnessTestCase):
         self.assertEqual([r["tool_use_id"] for r in saved], ["a", "b"])
         combined = self.trace.read_text() + json.dumps([e.to_dict() for e in self.events]) + result.text
         self.assertNotIn(marker, combined)
+        policy_records = [r for r in self.trace_records() if r["kind"] == "tool_policy"]
+        self.assertEqual(policy_records[0].get("error"), "ValueError")
+
+    def test_policy_exception_type_stays_out_of_trace_without_content_opt_in(self):
+        check = mock.Mock(side_effect=ValueError("synthetic-private-policy-detail"))
+        model = f.RecordingModel(f.tool_calls(("a", "write_file", {"path": "note", "content": "data"})),
+                                 f.reply("must not call"))
+        agent = self.agent(model, tool_policy=ToolPolicy(argument_checks={"write_file": check}),
+                           trace_include_content=False)
+        result = agent.run_result("go")
+        self.assertEqual(result.stop_reason, "tool_policy_error")
+        policy_records = [r for r in self.trace_records() if r["kind"] == "tool_policy"]
+        self.assertEqual(policy_records[0]["reason"], "policy_error")
+        self.assertNotIn("error", policy_records[0])
 
     def test_predicate_and_approval_receive_detached_snapshots_not_executed_arguments(self):
         original = {"path": "allowed.txt", "content": "original"}

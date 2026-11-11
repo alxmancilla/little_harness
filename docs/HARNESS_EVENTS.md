@@ -102,8 +102,10 @@ Quiet mode cannot suppress printing by your own model, inline tool or callbacks.
 
 - Any ordinary `Exception` from event construction or the callback disables
   observation for the rest of that run and sets `agent.event_callback_failed=True`.
-  The flag resets and delivery is retried on the next task. No exception details
-  enter the conversation, trace or console. Tool execution is never retried because
+  The flag resets and delivery is retried on the next task. The trace records an
+  `event_callback_failed` entry naming the failing event kind (plus the exception
+  type name with trace content enabled); exception text never enters the
+  conversation, trace or console. Tool execution is never retried because
   of observer failure. Read the flag after `run_result()` to detect lost events.
 - `KeyboardInterrupt` and other `BaseException` subclasses disable the observer and
   propagate. Ctrl+C uses the harness's existing interruption cleanup and preserves

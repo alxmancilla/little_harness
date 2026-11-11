@@ -50,7 +50,9 @@ Here `tools` is the application's explicit registry containing `write_file`.
   may choose a different permitted request within its remaining budgets.
 - Ordinary predicate exceptions fail closed and stop the task with
   `RunResult.status="stopped"`, `stop_reason="tool_policy_error"`. Exception text
-  is omitted. Later calls in the same batch get explicit not-run results; completed
+  is omitted everywhere; with trace content enabled the `tool_policy` trace record
+  carries the exception type name (e.g. `"error": "ValueError"`) for debugging.
+  Later calls in the same batch get explicit not-run results; completed
   results are retained. Fix the policy before explicitly continuing.
 - With any policy configured, executed arguments are a detached JSON snapshot.
   Predicates receive another deep copy, and approval receives its own copy. Their
