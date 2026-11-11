@@ -304,6 +304,7 @@ GitHub Actions runs the same command on Python 3.11 through 3.14 for every push 
 - [Reference: providers, configuration, controls, retrieval and evaluation](docs/REFERENCE.md)
 - [Build a useful application and validate its output](docs/BUILD_AN_AGENT.md)
 - [Evaluate the support assistant and review its answers](docs/SUPPORT_EVALUATION.md)
+- [Live baselines: first recorded results with real models](docs/BASELINES.md)
 - [Runtime specification and supported API](docs/HARNESS_SPEC.md)
 - [Architecture, process boundaries and editable diagrams](docs/ARCHITECTURE.md)
 - [Event callbacks and quiet embedding](docs/HARNESS_EVENTS.md)
