@@ -136,7 +136,7 @@ class WorkerDatabaseContract:
                                        reply("done"))
                 journal = FakeJournal()
                 agent = self.make_agent(model, tool_policy=policy, approve=lambda *_: approved, journal=journal)
-                with mock.patch("harness.agent.run_isolated_tool") as worker:
+                with mock.patch("harness.dispatch.run_isolated_tool") as worker:
                     self.assertEqual(agent.run_result("go").usage.tool_errors, 1)
                 worker.assert_not_called()
                 self.assertEqual(journal.inspect(), [])
@@ -147,7 +147,7 @@ class WorkerDatabaseContract:
                                    reply("done"))
             journal = FakeJournal()
             agent = self.make_agent(model, approve=lambda *_: True, journal=journal)
-            with self.subTest(injected=tuple(injected)), mock.patch("harness.agent.run_isolated_tool") as worker:
+            with self.subTest(injected=tuple(injected)), mock.patch("harness.dispatch.run_isolated_tool") as worker:
                 self.assertEqual(agent.run_result("go").usage.tool_errors, 1)
                 worker.assert_not_called()
                 self.assertEqual(journal.inspect(), [])

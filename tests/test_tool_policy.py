@@ -14,6 +14,7 @@ from tests import tool_fixtures
 from tests.storage_fakes import FakeJournal as fake_journal
 
 from harness import agent as h
+from harness import dispatch
 
 
 class PolicyTests(f.HarnessTestCase):
@@ -56,7 +57,7 @@ class PolicyTests(f.HarnessTestCase):
         tools["http_get"] = dict(tools["http_get"], fn=execute)
         agent = self.agent(model, tools=tools, tool_policy=ToolPolicy(read_only=True), approve=approve,
                            journal=fake_journal(), tool_timeout_seconds=3)
-        with mock.patch.object(h, "run_isolated_tool", return_value=h.ToolOutcome("completed", "4", False)) as worker:
+        with mock.patch.object(dispatch, "run_isolated_tool", return_value=dispatch.ToolOutcome("completed", "4", False)) as worker:
             result = agent.run_result("go")
         self.assertEqual(result.status, "completed")
         self.assertEqual(result.usage.tool_calls_attempted, 4)
@@ -154,7 +155,7 @@ class PolicyTests(f.HarnessTestCase):
                            approve=approve, journal=fake_journal(),
                            session_path=self.dir / "session.json", event_include_content=True)
         with mock.patch.dict(self.tools["write_file"], {"fn": execute}), \
-                mock.patch.object(h, "run_isolated_tool") as worker:
+                mock.patch.object(dispatch, "run_isolated_tool") as worker:
             result = agent.run_result("go")
         self.assertEqual((result.status, result.stop_reason), ("stopped", "tool_policy_error"))
         self.assertNotIn("outcome unknown", result.text)
@@ -302,8 +303,8 @@ class PolicyTests(f.HarnessTestCase):
                                    tools={"current_time": entry}, tool_timeout_seconds=3,
                                    tool_policy=ToolPolicy(read_only=True,
                                                           argument_checks={"current_time": lambda args: allowed}))
-                run_worker = h.run_isolated_tool
-                with mock.patch.object(h, "run_isolated_tool", wraps=run_worker) as worker:
+                run_worker = dispatch.run_isolated_tool
+                with mock.patch.object(dispatch, "run_isolated_tool", wraps=run_worker) as worker:
                     result = agent.run_result("go")
                 self.assertEqual(result.status, "completed")
                 self.assertEqual(worker.call_count, int(allowed))
@@ -328,7 +329,7 @@ class PolicyTests(f.HarnessTestCase):
                                    tool_policy=ToolPolicy(argument_checks={"write_file": check}),
                                    journal=fake_journal(),
                                    session_path=self.dir / "session.json")
-                with mock.patch.object(h, "run_isolated_tool") as worker, \
+                with mock.patch.object(dispatch, "run_isolated_tool") as worker, \
                         mock.patch.dict(self.tools["write_file"], {"fn": mock.Mock()}) as entry:
                     result = agent.run_result("go")
                     entry["fn"].assert_not_called()

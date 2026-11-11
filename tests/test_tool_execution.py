@@ -16,6 +16,7 @@ from tests import helpers as f
 from tests import tool_fixtures as tools
 
 from harness import agent as h
+from harness import dispatch
 
 
 class WorkerTests(f.HarnessTestCase):
@@ -180,7 +181,7 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         calls = [("a", "record_action", {"path": 3}),
                  ("b", "record_action", {"path": str(self.dir / "no.txt")}),
                  ("c", "missing", {})]
-        with mock.patch.object(h, "run_isolated_tool") as execute:
+        with mock.patch.object(dispatch, "run_isolated_tool") as execute:
             result = self.agent([f.tool_calls(*calls), f.reply("done")], approve=approve,
                                 tool_timeout_seconds=1).run_result("go")
         self.assertEqual(result.status, "completed")
@@ -188,7 +189,7 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         approve.assert_called_once()
         execute.assert_not_called()
         with mock.patch.dict(self.tools["record_action"], {"timeout_seconds": -1}), \
-                mock.patch.object(h, "run_isolated_tool") as execute:
+                mock.patch.object(dispatch, "run_isolated_tool") as execute:
             agent = self.agent([], approve=approve, tool_timeout_seconds=1)
             outcome = agent._run_tool(f.tool_calls(calls[1])["content"][0])
         self.assertTrue(outcome.is_error)
@@ -216,7 +217,7 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         self.assertEqual(self.tools["echo"]["timeout_seconds"], 0.25)
         self.assertNotIn("timeout_seconds", self.tools["echo"]["schema"])
         agent = self.agent([], tool_timeout_seconds=3)
-        with mock.patch.object(h, "run_isolated_tool", return_value=execution.ToolOutcome("completed", "ok", False)) as run:
+        with mock.patch.object(dispatch, "run_isolated_tool", return_value=execution.ToolOutcome("completed", "ok", False)) as run:
             outcome = agent._run_tool(f.tool_calls(("a", "echo", {"value": "ok"}))["content"][0])
         self.assertEqual(outcome, h.ToolCallOutcome("ok", False, execution.ToolOutcome("completed", "ok", False),
                                                      dispatched=True))
@@ -241,7 +242,7 @@ class TimeoutIntegrationTests(f.HarnessTestCase):
         batch = f.tool_calls(("a", "record_action", {"path": str(self.dir / "no.txt")}))
         agent = self.agent([batch], approve=approve, limits=h.RunLimits(max_seconds=1), tool_timeout_seconds=3)
         with mock.patch("harness.runtime.time.monotonic", side_effect=lambda: now[0]), \
-                mock.patch.object(h, "run_isolated_tool") as execute:
+                mock.patch.object(dispatch, "run_isolated_tool") as execute:
             result = agent.run_result("go")
         self.assertEqual(result.stop_reason, "max_seconds")
         execute.assert_not_called()

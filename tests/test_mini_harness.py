@@ -20,7 +20,7 @@ from tests.helpers import (HarnessTestCase, RecordingModel, compaction_history,
 from agents.teaching import TeachingConfig, create_tools, tools as teaching_tools
 from agents.teaching.config import load_env
 from agents.teaching.demos import rag_demo_model
-from harness import SessionLoadError, agent as h, model_clients as clients
+from harness import SessionLoadError, agent as h, model_clients as clients, validate_tool_input
 
 
 
@@ -288,10 +288,10 @@ class RunToolTests(HarnessTestCase):
     def test_argument_types_do_not_treat_booleans_as_numbers(self):
         schema = {"properties": {"count": {"type": "integer"}, "ratio": {"type": "number"},
                                   "flag": {"type": "boolean"}}}
-        h.validate_tool_input({"count": 1, "ratio": 1.5, "flag": True}, schema)
+        validate_tool_input({"count": 1, "ratio": 1.5, "flag": True}, schema)
         for args in ({"count": True}, {"ratio": False}, {"flag": 1}):
             with self.subTest(args=args), self.assertRaises(ValueError):
-                h.validate_tool_input(args, schema)
+                validate_tool_input(args, schema)
 
     def test_unknown_tool_is_an_error_listing_available_tools(self):
         result = self.agent([])._run_tool({"name": "nope", "input": {}})

@@ -81,7 +81,8 @@ rejected. Neither hook carries HotpotQA logic into the runtime. See the
 
 ## 4. Package-only application interfaces
 
-Execution logic has one implementation in `harness/agent.py`. Applications import
+Execution logic has one implementation: `Agent` in `harness/agent.py`, with its
+compaction and tool-dispatch methods in `harness/compaction.py` and `harness/dispatch.py`. Applications import
 `harness` directly. There are no legacy built-in wrappers or mutable global settings.
 Teaching tools, demos, `.env` loading and CLI live in `agents/teaching/`;
 the CLI runs as `python3 -m agents.teaching.cli`.

@@ -10,10 +10,12 @@ Start with [the offline labs](../LEARN.md) if these mechanics are new.
 Read [Agent._run](../harness/agent.py), starting at `def _run(self, task)`:
 
 1. Append the user task and advertise only the application's allowed schemas.
-2. Compact older context if necessary, counting that model call against the budget.
+2. Compact older context if necessary ([compaction.py](../harness/compaction.py)),
+   counting that model call against the budget.
 3. Ask the model for a normalized response; append its text/tool requests to history.
 4. With no tool requests, return an execution result. This is not proof of correctness.
-5. Otherwise, check each attempt's budget and dispatch through `_run_tool`.
+5. Otherwise, check each attempt's budget and dispatch through `_run_tool`
+   ([dispatch.py](../harness/dispatch.py)).
 6. `_run_tool` calls its `_gate_*` methods in order (admission, known tool, inputs,
    policy, timeout setting, approval) before `_dispatch` runs any action.
 7. Append paired tool results together, then ask the model again. Stop on a limit

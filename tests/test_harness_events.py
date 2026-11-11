@@ -11,6 +11,7 @@ from tests.helpers import used
 from tests.storage_fakes import FakeJournal as fake_journal
 
 from harness import agent as h
+from harness import dispatch
 
 
 class EventTests(f.HarnessTestCase):
@@ -245,8 +246,8 @@ class EventTests(f.HarnessTestCase):
                 self.events.clear()
                 model = f.RecordingModel(f.tool_calls(("a", "current_time", {}), ("b", "current_time", {})))
                 agent = self.agent(model, tool_timeout_seconds=1 if timeout else None)
-                outcome = h.ToolOutcome("timed_out", "timeout", True, True)
-                patch = (mock.patch.object(h, "run_isolated_tool", return_value=outcome) if timeout else
+                outcome = dispatch.ToolOutcome("timed_out", "timeout", True, True)
+                patch = (mock.patch.object(dispatch, "run_isolated_tool", return_value=outcome) if timeout else
                          mock.patch.dict(self.tools["current_time"], {"fn": mock.Mock(side_effect=KeyboardInterrupt())}))
                 with patch:
                     result = agent.run_result("go")

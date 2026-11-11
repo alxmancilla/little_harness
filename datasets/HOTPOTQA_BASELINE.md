@@ -131,6 +131,10 @@ The whole runtime directory can now be copied independently. References made
 before this move need a fresh pair; neither prompts/scoring nor artifact formats
 changed. The boundary now also fingerprints `harness/config.py`, `harness/memory.py`
 and `harness/session.py`, so older reference runs need a fresh pair too.
+Compaction and tool dispatch later moved out of `harness/agent.py` into the newly
+fingerprinted `harness/compaction.py` and `harness/dispatch.py` without behaviour
+changes; runs recorded before that split, including those in
+[the live baselines](../docs/BASELINES.md), also need a fresh pair.
 
 Phase 3 fingerprints `agents/hotpotqa/__init__.py`, `common.py` and `single.py`
 as shared dependencies; multi-agent runs also record `agents/hotpotqa/multi.py`.

@@ -43,7 +43,9 @@ view below for the journal commit-before-invocation requirement.
 
 | File / symbol | Responsibility | Important boundary |
 | --- | --- | --- |
-| `harness/agent.py`: `Agent` | Run lifecycle, conversation, compaction, dispatch and saving | Requires explicit tools/paths; imports no application |
+| `harness/agent.py`: `Agent` | Run lifecycle, conversation, model calls, events/traces and saving | Requires explicit tools/paths; imports no application |
+| `harness/compaction.py`: `CompactionMixin`, `render_transcript` | Context size estimates and summary-based compaction, mixed into `Agent` | Never separates tool calls from their results; history itself is never shortened |
+| `harness/dispatch.py`: `ToolDispatchMixin`, `ToolCallOutcome` | Ordered tool gates, journaled single invocation and isolated execution, mixed into `Agent` | Gates only reject; nothing here can authorize a tool |
 | `harness/tools.py`: `ToolRegistry`, `validate_tool_input` | Instance-owned registry; primitive schemas with optional choices and descriptions | Tool semantic checks still belong inside functions |
 | `harness/model_clients.py`: `HTTPModel` and adapters | HTTP/SSE, pre-stream retry, normalized responses, provider selection | Depends on no agent state; rejects model HTTP redirects |
 | `harness/runtime.py` | Immutable limits/usage/results and mutable per-task budget | Shared across main and summary calls; no provider dependency |
