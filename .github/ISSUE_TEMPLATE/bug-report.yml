@@ -49,4 +49,4 @@ body:
     id: version
     attributes:
       label: Little Harness version or commit
-      placeholder: e.g. v0.1.0 or a commit hash
+      placeholder: e.g. v0.1.1 or a commit hash

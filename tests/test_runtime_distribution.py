@@ -7,7 +7,7 @@ import io
 from zipfile import ZipFile
 
 from tests.helpers import REPO, TemporaryDirectoryTestCase
-from tools.package_runtime import DIST_INFO, build_wheel
+from tools.package_runtime import DIST_INFO, VERSION, build_wheel
 
 
 class RuntimeDistributionTests(TemporaryDirectoryTestCase):
@@ -41,7 +41,7 @@ class RuntimeDistributionTests(TemporaryDirectoryTestCase):
             import importlib.metadata, importlib.util
             from pathlib import Path
             import harness
-            assert importlib.metadata.version('little-harness') == '0.1.0'
+            assert importlib.metadata.version('little-harness') == '""" + VERSION + """'
             assert importlib.util.find_spec('agents') is None
             assert importlib.util.find_spec('lessons') is None
             assert not list(Path('.').glob('*.jsonl'))

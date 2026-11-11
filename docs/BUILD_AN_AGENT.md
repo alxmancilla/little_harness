@@ -152,7 +152,7 @@ For optional installation, build a pure-Python wheel with the standard library:
 ````sh
 package_dir=$(mktemp -d)
 python3 -m tools.package_runtime --output "$package_dir"
-python3 -m pip install --no-index --no-deps "$package_dir/little_harness-0.1.0-py3-none-any.whl"
+python3 -m pip install --no-index --no-deps "$package_dir"/little_harness-*.whl
 ````
 
 Use your own virtual environment for installation. The builder packages only runtime

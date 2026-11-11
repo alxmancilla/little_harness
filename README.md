@@ -138,7 +138,7 @@ python3 -m tools.package_runtime --output ~/wheels
 Then, in the other project's virtual environment:
 
 ````sh
-python3 -m pip install --no-index --no-deps ~/wheels/little_harness-0.1.0-py3-none-any.whl
+python3 -m pip install --no-index --no-deps ~/wheels/little_harness-0.1.1-py3-none-any.whl
 ````
 
 Import from `harness` as above. The builder refuses to overwrite an existing wheel,
