@@ -1,15 +1,31 @@
 # Little Harness
 
-**A small Python runtime for agents, with explicit controls.**
+**Learn how AI agents work by building the loop yourself.** A small Python agent
+runtime with explicit controls, plus five offline labs. No packages, no API key.
 
-Includes teaching applications and reproducible evaluation tools. The runtime uses
-only the **Python standard library** (Python 3.11+); the optional `stores/` database
-adapters need the `postgres` (psycopg) or `mongodb` (pymongo) extras. No third-party packages, agent
-framework, database service or API key are needed for the offline examples.
+````sh
+git clone https://github.com/alxmancilla/little_harness.git
+cd little_harness
+python3 -m lessons.preview
+````
 
-The core loop is simple: ask a model, validate its tool requests, execute permitted
-tools, return their results and repeat. Applications supply the prompt and tools;
-the runtime handles execution, conversation state and optional controls.
+That runs a complete agent offline in a few seconds: a model asks for a tool, the
+harness checks and runs it, and the answer comes back. Requires Python 3.11+.
+
+**Pick your path:**
+
+- **I want to understand agents.** Follow the [learning path](LEARN.md): five
+  offline labs, about an afternoon. Start [below](#learn-agent-development).
+- **I want to build an agent.** Read [Build on the runtime](#build-on-the-runtime)
+  and [use it in another project](#use-it-in-another-project).
+
+The core loop: ask a model, validate its tool requests, run permitted tools, return
+their results and repeat. Your application supplies the prompt and tools; the
+runtime (about 2,200 lines, standard library only) handles execution, conversation
+state and optional controls such as budgets, policies, approval and crash recovery.
+The optional `stores/` database adapters need the `postgres` (psycopg) or `mongodb`
+(pymongo) extras. The code is licensed under [MIT](LICENSE); the bundled HotpotQA
+data keeps its own [CC BY-SA 4.0 license](datasets/hotpotqa/README.md#attribution-and-license).
 
 ## Learn agent development
 
@@ -23,13 +39,8 @@ Use **Python 3.11+**. Download or clone the repository, open its folder in your
 editor and open a terminal there. Follow the [setup checklist](LEARN.md#before-you-start)
 if you are new to running Python projects. Nothing needs to be installed with `pip`.
 
-**First, watch a completed preview—no editing or reference solution required:**
-
-````sh
-python3 -m lessons.preview
-````
-
-Expect answer `3`, two model calls and one tool execution. Then open
+The [preview](#little-harness) above should show answer `3`, two model calls and one
+tool execution. Then open
 [Lab 0](lessons/00-from-functions-to-agents.md) and build the loop in five small
 checkpoints. Edit only `run_loop` in [lessons/exercises.py](lessons/exercises.py).
 **The first check intentionally fails until you implement that checkpoint:**
@@ -140,6 +151,27 @@ print(result.to_dict())
 `run()` returns display text. `run_result()` returns an immutable result containing
 status, stop reason, answer, usage and elapsed time; `to_dict()` is JSON-serializable.
 Inspect status as well as answer text: a retained answer does not imply completion.
+
+### Use it in another project
+
+Copy the `harness/` directory into your project, or build a wheel and install it.
+The wheel contains only `harness/`, has no dependencies and is built with the
+standard library alone. The output directory must already exist:
+
+````sh
+mkdir -p ~/wheels
+python3 -m tools.package_runtime --output ~/wheels
+````
+
+Then, in the other project's virtual environment:
+
+````sh
+python3 -m pip install --no-index --no-deps ~/wheels/little_harness-0.1.0-py3-none-any.whl
+````
+
+Import from `harness` as above. The builder refuses to overwrite an existing wheel,
+so bump `version` in `pyproject.toml` before rebuilding after changes. The harness
+does not create directories for `trace_path` or `session_path`; create them first.
 
 ### Register application tools
 
