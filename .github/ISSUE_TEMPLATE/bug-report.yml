@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in the harness, labs or examples doesn't work as documented.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't paste API keys, traces with private content or `.env` files.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: The exact command or a minimal code snippet.
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error output
+      description: The full error message or traceback.
+      render: text
+  - type: input
+    id: python
+    attributes:
+      label: Python version and OS
+      placeholder: e.g. Python 3.12.4 on macOS 15
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Model setup
+      options:
+        - Offline (scripted model, labs or examples)
+        - Anthropic
+        - OpenAI
+        - OpenAI-compatible or gateway
+        - My own model callable
+  - type: input
+    id: version
+    attributes:
+      label: Little Harness version or commit
+      placeholder: e.g. v0.1.0 or a commit hash

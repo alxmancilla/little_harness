@@ -1,0 +1,61 @@
+name: Lab feedback
+description: Tell us where a lab was confusing, too hard or too easy.
+title: "[Lab feedback] "
+labels: ["lab feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying the labs. Short, honest feedback helps the most,
+        including "I got stuck here and gave up".
+  - type: dropdown
+    id: lab
+    attributes:
+      label: Which lab?
+      options:
+        - Preview (python3 -m lessons.preview)
+        - Lab 0 - From functions to agents
+        - Lab 1 - Follow the loop
+        - Lab 2 - Build a tool
+        - Lab 3 - Diagnose a failure
+        - Lab 4 - Build an application (capstone)
+        - Learning path in general
+    validations:
+      required: true
+  - type: dropdown
+    id: finished
+    attributes:
+      label: Did you finish it?
+      options:
+        - "Yes, without hints"
+        - "Yes, with hints"
+        - "Yes, but I used the solution"
+        - "No, I got stuck"
+        - "No, I stopped for another reason"
+    validations:
+      required: true
+  - type: textarea
+    id: stuck
+    attributes:
+      label: Where did you get stuck or confused?
+      description: The step or checkpoint, what you expected and what happened. Paste check output if you have it.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What would have helped?
+      description: A clearer explanation, a better hint, an example, a different order...
+  - type: dropdown
+    id: experience
+    attributes:
+      label: Your Python experience
+      options:
+        - New to Python
+        - Comfortable with the basics
+        - Experienced
+  - type: input
+    id: time
+    attributes:
+      label: Roughly how long did it take?
+      placeholder: e.g. 40 minutes

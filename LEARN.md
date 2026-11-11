@@ -222,3 +222,9 @@ guided labs**:
 - Keep personal data and credentials out of submissions; use the supplied synthetic text.
 - Obtain permission before any optional paid-model exercise. Scripted success is
   not evidence that the same behavior will occur with a live model.
+
+## Tell us how it went
+
+Finished a lab, or got stuck? Share it with the
+[lab feedback form](https://github.com/alxmancilla/little_harness/issues/new?template=lab-feedback.yml).
+It takes about two minutes, and knowing where people stop is what improves the labs.
