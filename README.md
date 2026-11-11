@@ -294,7 +294,8 @@ Run from the repository root:
 python3 -m unittest -q
 ````
 
-Focused suites and installed-data checks are listed in the [test reference](docs/REFERENCE.md#tests).
+Focused suites, installed-data checks and opt-in paid live provider checks
+(`HARNESS_TEST_LIVE=1`) are listed in the [test reference](docs/REFERENCE.md#tests).
 GitHub Actions runs the same command on Python 3.11 through 3.14 for every push to
 `main` and every pull request ([workflow](.github/workflows/tests.yml)).
 

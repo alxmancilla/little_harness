@@ -620,12 +620,15 @@ class AnthropicStreamTests(unittest.TestCase):
         self.assertEqual(resp["content"][0]["input"], {})
 
     def test_trailing_done_sentinel_from_gateways_is_ignored(self):
+        # Event shapes recorded from the AI gateway's Anthropic route (content replaced).
         resp = self.read(
             {"type": "message_start", "message": {}},
             {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+            {"type": "ping"},
             {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hi"}},
             {"type": "content_block_stop", "index": 0},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_details": None}},
+            {"type": "message_delta", "delta": {"container": None, "stop_details": None,
+                                                "stop_reason": "end_turn", "stop_sequence": None}},
             {"type": "message_stop"}, "[DONE]")
         self.assertEqual(resp["content"], [{"type": "text", "text": "Hi"}])
         self.assertEqual(resp["stop_reason"], "end_turn")

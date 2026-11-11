@@ -420,6 +420,20 @@ After preparing the full development set, include the installed-data checks with
 make live-model calls. Shared fixtures live in [tests/helpers.py](../tests/helpers.py);
 importing them does not initialize applications.
 
+Live provider checks are opt-in and **make paid model calls**. They read provider
+settings from the environment and `.env` (shell values win), stream a short text
+reply and complete one tool round trip per model. List several models to cover each
+gateway route; on a parse failure the message shows the stream's event types and
+keys, never content:
+
+````sh
+HARNESS_TEST_LIVE=1 uv run python -m unittest -v tests.test_live_providers
+HARNESS_TEST_LIVE=1 HARNESS_TEST_LIVE_MODELS=claude-sonnet-5-5,gpt-5.6-sol uv run python -m unittest -v tests.test_live_providers
+````
+
+Run them after changing `harness/model_clients.py` or switching provider/gateway; the
+offline suite uses idealised streams and cannot catch provider-specific framing.
+
 Storage backends share the contract suites in
 [tests/storage_conformance.py](../tests/storage_conformance.py). The PostgreSQL and
 MongoDB tests skip unless the extra is installed and a test database is named; each
