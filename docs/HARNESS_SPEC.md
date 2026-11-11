@@ -10,7 +10,7 @@ current behavior; **MAY** denotes an optional capability. Changes to these contr
 should update the implementation, mapped tests and this specification together.
 For implementation structure and diagrams, see [Architecture](ARCHITECTURE.md).
 Ownership changes and completed checkpoints are specified in the
-[separation contract](HARNESS_SEPARATION_SPEC.md) and [migration plan](HARNESS_MIGRATION_PLAN.md).
+[separation contract](design/HARNESS_SEPARATION_SPEC.md) and [migration plan](design/HARNESS_MIGRATION_PLAN.md).
 
 ## 1. Purpose and scope
 

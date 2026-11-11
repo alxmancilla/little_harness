@@ -2,8 +2,8 @@
 
 This is the implementation companion to the [behavioral specification](HARNESS_SPEC.md).
 It describes the current standard-library design, not a proposed framework migration.
-The [separation specification](HARNESS_SEPARATION_SPEC.md) and
-[migration plan](HARNESS_MIGRATION_PLAN.md) record the completed boundaries: runtime,
+The [separation specification](design/HARNESS_SEPARATION_SPEC.md) and
+[migration plan](design/HARNESS_MIGRATION_PLAN.md) record the completed boundaries: runtime,
 teaching/HotpotQA applications, host evaluation, unrelated inventory and support
 examples (with separate support evaluation) and optional database adapters in `stores/`.
 

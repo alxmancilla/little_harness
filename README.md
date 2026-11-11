@@ -86,33 +86,6 @@ inventory uses `inventory-trace.jsonl`. Scripted success demonstrates mechanics,
 **not model accuracy**. Teaching configuration can be overridden by your existing
 environment or `.env`.
 
-## Project structure
-
-| Location | Responsibility |
-| --- | --- |
-| [harness/](harness/) | Reusable loop, tool registry, provider clients, budgets, events, policies, workers and storage interfaces |
-| [stores/](stores/) | Optional PostgreSQL and MongoDB session, journal and memory adapters |
-| [agents/teaching/](agents/teaching/) | Teaching tools, explicit configuration, factories, scripted demos and CLI |
-| [agents/hotpotqa/](agents/hotpotqa/) | Restricted question-answering tools, single-agent and researcher/reviewer workflows, shared worker helpers |
-| [evaluation/hotpotqa/](evaluation/hotpotqa/) | Dataset preparation, per-question execution, host-only scoring and comparisons |
-| [evaluation/support/](evaluation/support/) | Support assistant evaluation: 17 single-turn cases and 5 multi-turn scenarios |
-| [examples/inventory_agent.py](examples/inventory_agent.py) | Independent application using the public runtime API |
-| [examples/support_agent.py](examples/support_agent.py) | Support assistant with its fictional knowledge in `examples/support_knowledge/` |
-| [lessons/](lessons/) | Guided offline labs, learner exercises, checks and reference solutions; start at [LEARN.md](LEARN.md) |
-| [tools/](tools/) | Runtime wheel builder, storage service check, storage test runner and storage benchmark |
-| [compose.yaml](compose.yaml) | Local PostgreSQL 18 and MongoDB 9.0 for the storage tests |
-| [tests/](tests/) | Offline regressions; database storage suites skip unless databases are configured; reusable fixtures in `tests/helpers.py` |
-| [datasets/](datasets/) | Dataset guides and the attributed ten-question HotpotQA demo |
-| [docs/](docs/) | Runtime contracts, architecture diagrams and migration history |
-
-Little Harness uses the Python package name `harness`. Only the package API and
-module commands are supported. Import from `harness`;
-there are no root compatibility scripts, aliases or global tool registry.
-The complete `harness/` directory is independently copyable. An optional
-[standard-library wheel builder](docs/BUILD_AN_AGENT.md#reuse-without-a-framework)
-packages just the runtime for local installation. Importing it does not load `.env`,
-create a workspace or register application tools.
-
 ## Run with a real model
 
 Configure a [provider](docs/REFERENCE.md#providers) and its credential locally, then run a task or
@@ -262,7 +235,7 @@ untrusted data, not an instruction or an access-control boundary. Memory writes
 use the ordinary risky-tool policy and approval gates. Timed memory tools reconnect
 inside workers; a timed-out write may have succeeded and must not be retried blindly.
 See [setup, recovery and memory](docs/REFERENCE.md#postgresql-sessions-and-journals-optional)
-and the [local operation measurements](docs/STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements).
+and the [local operation measurements](docs/design/STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements).
 
 ## Teaching tools, retrieval and evaluation
 
@@ -317,6 +290,33 @@ authoritative list of goals and non-goals.
 See [traces, sessions and compaction](docs/REFERENCE.md#traces-sessions-and-compaction)
 for trace content opt-ins and history-compaction behavior.
 
+## Project structure
+
+| Location | Responsibility |
+| --- | --- |
+| [harness/](harness/) | Reusable loop, tool registry, provider clients, budgets, events, policies, workers and storage interfaces |
+| [stores/](stores/) | Optional PostgreSQL and MongoDB session, journal and memory adapters |
+| [agents/teaching/](agents/teaching/) | Teaching tools, explicit configuration, factories, scripted demos and CLI |
+| [agents/hotpotqa/](agents/hotpotqa/) | Restricted question-answering tools, single-agent and researcher/reviewer workflows, shared worker helpers |
+| [evaluation/hotpotqa/](evaluation/hotpotqa/) | Dataset preparation, per-question execution, host-only scoring and comparisons |
+| [evaluation/support/](evaluation/support/) | Support assistant evaluation: 17 single-turn cases and 5 multi-turn scenarios |
+| [examples/inventory_agent.py](examples/inventory_agent.py) | Independent application using the public runtime API |
+| [examples/support_agent.py](examples/support_agent.py) | Support assistant with its fictional knowledge in `examples/support_knowledge/` |
+| [lessons/](lessons/) | Guided offline labs, learner exercises, checks and reference solutions; start at [LEARN.md](LEARN.md) |
+| [tools/](tools/) | Runtime wheel builder, storage service check, storage test runner and storage benchmark |
+| [compose.yaml](compose.yaml) | Local PostgreSQL 18 and MongoDB 9.0 for the storage tests |
+| [tests/](tests/) | Offline regressions; database storage suites skip unless databases are configured; reusable fixtures in `tests/helpers.py` |
+| [datasets/](datasets/) | Dataset guides and the attributed ten-question HotpotQA demo |
+| [docs/](docs/) | Runtime contracts, architecture diagrams and migration history |
+
+Little Harness uses the Python package name `harness`. Only the package API and
+module commands are supported. Import from `harness`;
+there are no root compatibility scripts, aliases or global tool registry.
+The complete `harness/` directory is independently copyable. An optional
+[standard-library wheel builder](docs/BUILD_AN_AGENT.md#reuse-without-a-framework)
+packages just the runtime for local installation. Importing it does not load `.env`,
+create a workspace or register application tools.
+
 ## Tests
 
 Tests use the standard library and need no provider credentials or network calls.
@@ -333,14 +333,25 @@ GitHub Actions runs the same command on Python 3.11 through 3.14 for every push 
 
 ## Further reading
 
-- [Reference: providers, configuration, controls, retrieval and evaluation](docs/REFERENCE.md)
-- [Build a useful application and validate its output](docs/BUILD_AN_AGENT.md)
-- [Evaluate the support assistant and review its answers](docs/SUPPORT_EVALUATION.md)
-- [Live baselines: first recorded results with real models](docs/BASELINES.md)
-- [Runtime specification and supported API](docs/HARNESS_SPEC.md)
-- [Architecture, process boundaries and editable diagrams](docs/ARCHITECTURE.md)
-- [Event callbacks and quiet embedding](docs/HARNESS_EVENTS.md)
-- [Tool policies and approval ordering](docs/TOOL_POLICIES.md)
-- [HotpotQA comparison workflow](datasets/HOTPOTQA_BASELINE.md)
-- [Separation contract](docs/HARNESS_SEPARATION_SPEC.md) and [migration checkpoints](docs/HARNESS_MIGRATION_PLAN.md)
-- [Storage specification](docs/STORAGE_SPEC.md) and [plan](docs/STORAGE_PLAN.md) for PostgreSQL and MongoDB state, journal and memory
+All documentation is indexed in [docs/](docs/README.md).
+
+**Build an agent:**
+[application recipe](docs/BUILD_AN_AGENT.md) ·
+[reference](docs/REFERENCE.md) ·
+[tool policies](docs/TOOL_POLICIES.md) ·
+[event callbacks](docs/HARNESS_EVENTS.md)
+
+**Understand the runtime:**
+[architecture](docs/ARCHITECTURE.md) ·
+[runtime specification](docs/HARNESS_SPEC.md) ·
+[storage specification](docs/STORAGE_SPEC.md)
+
+**Evaluate:**
+[support assistant](docs/SUPPORT_EVALUATION.md) ·
+[live baselines](docs/BASELINES.md) ·
+[HotpotQA comparison](datasets/HOTPOTQA_BASELINE.md)
+
+**Design history:**
+[separation contract](docs/design/HARNESS_SEPARATION_SPEC.md) ·
+[migration plan](docs/design/HARNESS_MIGRATION_PLAN.md) ·
+[storage plan](docs/design/STORAGE_PLAN.md)

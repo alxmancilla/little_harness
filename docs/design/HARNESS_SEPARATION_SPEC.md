@@ -15,7 +15,7 @@ Non-goals: a new agent framework, distributed scheduling, parallel tools, a prov
 rewrite, an OS sandbox or exactly-once external actions. (Database memory, originally
 a non-goal, is now provided outside the core: `harness.MemoryStore`/`memory_tools`
 define the interface and the optional `stores/` adapters implement it for PostgreSQL
-and MongoDB; see [storage spec](STORAGE_SPEC.md).)
+and MongoDB; see [storage spec](../STORAGE_SPEC.md).)
 
 ## 2. Ownership and dependency direction
 
@@ -66,7 +66,7 @@ to 40000, optional keyword-only `compact_at_tokens` defaults to `None`, and
 create those roots. Trace/session/journal I/O retains its existing run-time behavior.
 The same keywords may instead be grouped as `observability=ObservabilityConfig(...)`,
 `tool_config=ToolConfig(...)` and `context=ContextConfig(...)` with identical defaults
-and validation; see [FR-16](HARNESS_SPEC.md#fr-16--accept-grouped-configuration-equivalently).
+and validation; see [FR-16](../HARNESS_SPEC.md#fr-16--accept-grouped-configuration-equivalently).
 
 The explicit tool mapping snapshots membership, not callable state or arbitrary
 trusted registry-entry mutations. Use separate registries and separate agent/model
@@ -77,7 +77,7 @@ Two public extension points replace application overrides of private methods:
 cannot bypass the allowlist, policy, approval or journal. `trace_context` snapshots
 JSON annotations such as a role; runtime fields win and reserved envelope keys are
 rejected. Neither hook carries HotpotQA logic into the runtime. See the
-[interface contract](HARNESS_SPEC.md#31-agent-and-extension-interfaces) for details.
+[interface contract](../HARNESS_SPEC.md#31-agent-and-extension-interfaces) for details.
 
 ## 4. Package-only application interfaces
 
@@ -116,7 +116,7 @@ host implementation hashes are recorded separately. No historical manifest
 is rewritten to accept the new layout.
 
 The supported embedding API is the public `harness` exports and documented options
-and hooks in [the interface contract](HARNESS_SPEC.md#31-agent-and-extension-interfaces).
+and hooks in [the interface contract](../HARNESS_SPEC.md#31-agent-and-extension-interfaces).
 The inventory example validates that surface with its own prompt, model callable
 and read-only inventory registry, including JSON-bound isolated execution.
 
@@ -151,6 +151,6 @@ and read-only inventory registry, including JSON-bound isolated execution.
 
 ## 6. Architectural view
 
-Editable diagram: [harness-separation.mmd](harness-separation.mmd). The existing
-[behavior specification](HARNESS_SPEC.md) remains the detailed dispatch contract;
+Editable diagram: [harness-separation.mmd](../harness-separation.mmd). The existing
+[behavior specification](../HARNESS_SPEC.md) remains the detailed dispatch contract;
 this document governs ownership and migration-specific differences.

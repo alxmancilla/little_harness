@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-DOCS = sorted([*REPO.glob("*.md"), *REPO.glob("docs/*.md"), *REPO.glob("lessons/*.md"),
+DOCS = sorted([*REPO.glob("*.md"), *REPO.glob("docs/**/*.md"), *REPO.glob("lessons/*.md"),
                *REPO.glob("datasets/*.md"), *REPO.glob("datasets/hotpotqa/*.md"),
                *REPO.glob("examples/**/*.md")])
 # Modules that learners create themselves in the capstone lesson.

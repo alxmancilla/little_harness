@@ -286,7 +286,7 @@ The shared suites and backend-specific tests cover these scenarios where applica
 
 ## 7. Decisions
 
-Settled in Phase 0 of the [plan](STORAGE_PLAN.md):
+Settled in Phase 0 of the [plan](design/STORAGE_PLAN.md):
 
 1. **Dependency declaration:** `pyproject.toml` with no runtime dependencies and two
    optional extras, `postgres` (`psycopg[binary]>=3.3,<4`) and `mongodb`

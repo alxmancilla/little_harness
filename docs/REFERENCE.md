@@ -475,6 +475,6 @@ uv run python -m unittest -q
 ````
 
 The [storage workflow](../.github/workflows/storage.yml) runs them in CI.
-The [storage plan](STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements)
+The [storage plan](design/STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements)
 records a small reproducible local latency probe and its limitations.
 

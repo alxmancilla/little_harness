@@ -1,6 +1,6 @@
 # Little Harness storage plan and checkpoints
 
-Companion: [storage specification](STORAGE_SPEC.md). Each phase is a bounded
+Companion: [storage specification](../STORAGE_SPEC.md). Each phase is a bounded
 checkpoint with its own gate. Historical checkpoints below describe the decisions
 at the time; the current PostgreSQL/MongoDB-only journal and memory design supersedes
 their SQLite references. Session JSON remains supported.
@@ -29,7 +29,7 @@ checks them successfully.
 
 ### Phase 0 checkpoint — complete
 
-- Decisions recorded in [spec section 7](STORAGE_SPEC.md#7-decisions).
+- Decisions recorded in [spec section 7](../STORAGE_SPEC.md#7-decisions).
 - `pyproject.toml` declares no runtime dependencies and two optional extras, added
   with `uv add --optional`: `postgres` (`psycopg[binary]>=3.3,<4`) and `mongodb`
   (`pymongo>=4.19,<5`). `uv.lock` pins them (psycopg 3.3.8, PyMongo 4.19.0).
@@ -218,7 +218,7 @@ The gate passed in CI for commit `bbf7d61`.
 
 ### Phase 6 checkpoint — review and measurements
 
-- Reviewed [STORAGE_SPEC](STORAGE_SPEC.md) against the adapters and conformance tests;
+- Reviewed [STORAGE_SPEC](../STORAGE_SPEC.md) against the adapters and conformance tests;
   corrected stale claims about file journals, driver imports, timeouts and bounded work.
   The PostgreSQL adapters now reject sub-millisecond statement timeouts instead of
   rounding them to zero, which would disable the server timeout.
@@ -249,7 +249,7 @@ The gate passed in CI for commit `bbf7d61`.
   journal `begin` and pending inspection may scan all unresolved journal actions.
 
   To repeat, start the local test services and set both test connection variables as
-  in the [test reference](REFERENCE.md#tests), then run `uv run python -m
+  in the [test reference](../REFERENCE.md#tests), then run `uv run python -m
   tools.benchmark_storage`. Use **disposable test services only**: the probe creates
   a uniquely named PostgreSQL schema and MongoDB database, writes test records, and
   drops those exact temporary resources on completion. An interrupted process or a
@@ -270,7 +270,7 @@ The gate passed in CI for commit `bbf7d61`.
 - **Memory.** `MemoryStore`/`memory_tools` with namespace-scoped, quota-bounded,
   untrusted recall; database stores and timed worker bindings (`memory_worker_tools`).
 - **CLI.** Database-specific journal recovery subcommands with confirmation rules
-  (see [ST-09](STORAGE_SPEC.md#st-09--keep-human-recovery-available)).
+  (see [ST-09](../STORAGE_SPEC.md#st-09--keep-human-recovery-available)).
 - **Local tooling.** `compose.yaml` services, `tools.check_storage_services`,
   `tools.benchmark_storage`, and `uv run python -m tools.run_storage_tests`, which
   mirrors `storage.yml` in one command (start services, check them, run the storage
