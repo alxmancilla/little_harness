@@ -413,7 +413,13 @@ python3 -m unittest -v tests.test_tool_contracts tests.test_trace_privacy tests.
 python3 -m unittest -v tests.test_support_evaluation
 python3 -m unittest -v tests.test_memory tests.test_storage_conformance
 python3 -m unittest -v tests.test_agent_config tests.test_tool_policy tests.test_harness_events tests.test_storage_memory_workers
+python3 -m unittest -v tests.test_docs
 ````
+
+`tests.test_docs` checks every relative link and heading anchor in the Markdown docs,
+that each documented `python3 -m` command names a runnable repository module, and that
+stated dataset sizes and Python version claims match the data and `pyproject.toml`.
+When it fails, fix the document (or the test, if the stated number changed on purpose).
 
 After preparing the full development set, include the installed-data checks with
 `HARNESS_TEST_HOTPOTQA_DEV=1 python3 -m unittest -q`. This does not download data or
