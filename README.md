@@ -127,12 +127,11 @@ Inspect status as well as answer text: a retained answer does not imply completi
 
 ### Use it in another project
 
-Copy the `harness/` directory into your project, or build a wheel and install it.
-The wheel contains only `harness/`, has no dependencies and is built with the
-standard library alone. The output directory must already exist:
+Copy the `harness/` directory into your project, or install the wheel attached to
+each [release](https://github.com/alxmancilla/little_harness/releases). To build the
+wheel yourself (only `harness/`, no dependencies, standard library alone):
 
 ````sh
-mkdir -p ~/wheels
 python3 -m tools.package_runtime --output ~/wheels
 ````
 
@@ -143,8 +142,9 @@ python3 -m pip install --no-index --no-deps ~/wheels/little_harness-0.1.0-py3-no
 ````
 
 Import from `harness` as above. The builder refuses to overwrite an existing wheel,
-so bump `version` in `pyproject.toml` before rebuilding after changes. The harness
-does not create directories for `trace_path` or `session_path`; create them first.
+so bump `version` in `pyproject.toml` before rebuilding after changes. Missing
+directories for `trace_path` and `session_path` are created on first write, and
+`trace_path=None` turns the JSONL trace off.
 
 ### Register application tools
 

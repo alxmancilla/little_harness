@@ -61,3 +61,7 @@ class RuntimeDistributionTests(TemporaryDirectoryTestCase):
         other = self.root / "other"
         other.mkdir()
         self.assertEqual(build_wheel(other).read_bytes(), before)
+
+    def test_build_creates_a_missing_output_directory(self):
+        wheel = build_wheel(self.root / "new" / "dist")
+        self.assertTrue(wheel.is_file())

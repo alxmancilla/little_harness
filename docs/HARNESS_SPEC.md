@@ -409,7 +409,7 @@ is not a returned `RunResult.status` value.
 | Tool output | 8,000 content characters, plus truncation notice; core accepts `max_tool_output` |
 | `limits`, tool timeout, journal, policy, callbacks | Unset/off unless explicitly configured |
 | `quiet`, event content, trace content | `False` |
-| Trace / library session | `trace.jsonl` / no session unless supplied |
+| Trace / library session | `trace.jsonl` (`None` disables it) / no session unless supplied; missing parent directories are created on first write |
 | CLI interactive session | `session.json`, configurable with `HARNESS_SESSION` |
 | Workspace / knowledge | Teaching configuration only: `./workspace` / `./knowledge`; explicit paths or CLI environment settings |
 | Core `writable_roots` | Empty tuple; applications declare all writable roots for journal path exclusion |

@@ -1,7 +1,7 @@
 """Build a standard pure-Python wheel using only the standard library.
 
 No build backend, downloads, application packages or runtime dependencies.
-Run: python3 -m tools.package_runtime --output /existing/output/directory
+Run: python3 -m tools.package_runtime --output DIRECTORY
 """
 
 import argparse
@@ -54,6 +54,7 @@ def build_wheel(output):
             info.external_attr = 0o100644 << 16
             archive.writestr(info, data)
     destination = Path(output) / FILENAME
+    destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("xb") as stream:
         stream.write(buffer.getvalue())
     return destination
@@ -61,12 +62,12 @@ def build_wheel(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, required=True, help="existing output directory; no overwrites")
+    parser.add_argument("--output", type=Path, required=True, help="output directory, created if missing; never overwrites a wheel")
     args = parser.parse_args()
     try:
         destination = build_wheel(args.output)
     except (ValueError, OSError):
-        parser.exit(1, "Could not build wheel; use an existing directory without a wheel of the same name.\n")
+        parser.exit(1, "Could not build wheel; the output directory may already contain this version (bump it in pyproject.toml).\n")
     print(destination)
 
 

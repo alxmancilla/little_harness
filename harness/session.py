@@ -79,6 +79,7 @@ class SessionFile:
 
     def save(self, messages, compaction, *, durable=False):
         """Write via a temporary file; durable saves fsync the file and, on POSIX, its directory."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.tmp_path.open("w", encoding="utf-8") as stream:
             json.dump({"version": SESSION_VERSION, "messages": messages, "compaction": compaction}, stream)
             if durable:

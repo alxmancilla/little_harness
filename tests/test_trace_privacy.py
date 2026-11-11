@@ -10,6 +10,22 @@ from tests.helpers import REPO, Model, TemporaryDirectoryTestCase, compaction_hi
 
 
 class TracePrivacyTests(TemporaryDirectoryTestCase):
+    def test_trace_and_session_directories_are_created_and_tracing_can_be_disabled(self):
+        runs = self.root / "runs" / "nested"
+        agent = Agent(Model(reply("first")), "sys", tools={}, quiet=True,
+                      trace_path=runs / "trace.jsonl", session_path=runs / "session.json")
+        self.assertEqual(agent.run_result("go").status, "completed")
+        self.assertTrue((runs / "trace.jsonl").is_file())
+        self.assertTrue((runs / "session.json").is_file())
+
+        cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, cwd)
+        untraced = Agent(Model(reply("second")), "sys", tools={}, quiet=True, trace_path=None)
+        self.assertIsNone(untraced.trace_path)
+        self.assertEqual(untraced.run_result("go").answer, "second")
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["runs"])
+
     def test_defaults_omit_tasks_arguments_outputs_and_provider_usage_extensions(self):
         tools = ToolRegistry()
 

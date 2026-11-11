@@ -146,7 +146,7 @@ class Agent(CompactionMixin, ToolDispatchMixin):
             raise TypeError("on_event must be callable or None")
         if type(event_include_content) is not bool or type(quiet) is not bool:
             raise TypeError("event_include_content and quiet must be booleans")
-        self.trace_path = Path(trace_path)
+        self.trace_path = None if trace_path is None else Path(trace_path)
         self.trace_context = json.loads(json.dumps(dict(trace_context or {}), allow_nan=False))
         self.trace_include_content = trace_include_content
         self.on_event, self.event_include_content, self.quiet = on_event, event_include_content, quiet
@@ -289,6 +289,8 @@ class Agent(CompactionMixin, ToolDispatchMixin):
 
     def _trace(self, kind, *, content_fields=None, **data):
         """Separate runtime metadata from opt-in conversation and error content."""
+        if self.trace_path is None:
+            return
         if self.trace_include_content:
             data.update(content_fields or {})
         elif "usage" in data:
@@ -298,6 +300,7 @@ class Agent(CompactionMixin, ToolDispatchMixin):
         if self._journal_run_id is not None:
             data = {"run_id": self._journal_run_id, **data}
         record = {"ts": datetime.now(timezone.utc).isoformat(), "kind": kind, **self.trace_context, **data}
+        self.trace_path.parent.mkdir(parents=True, exist_ok=True)
         with self.trace_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
 
