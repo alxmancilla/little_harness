@@ -160,6 +160,7 @@ passing its supplied checks is not the whole assignment.
 | What you see | What to do |
 | --- | --- |
 | `python3` not found | Install Python 3.11+ or use an existing `python` / Windows `py -3` launcher. Check its version before continuing. |
+| `needs Python 3.11 or newer` | Your `python3` is older (macOS's built-in one is 3.9). Run the same command with `python3.11`, `python3.12` etc., or with `uv run python` if you use uv. |
 | `No module named lessons` | Open a terminal in the folder containing `README.md` and `lessons/`, not inside `lessons/`. Run `python3 -m lessons.preview`, not a `.py` file directly. |
 | `SyntaxError` or `IndentationError` after editing | Check the edited function's syntax and indentation. Save the file before rerunning; a syntax error must be fixed before the checker can load it. |
 | Preview works, but a checkpoint fails | Your setup is working. Read the named checkpoint and hint; edit only the relevant function. Do not add credentials or change `.env`. |

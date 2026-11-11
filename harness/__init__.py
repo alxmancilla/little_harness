@@ -1,5 +1,12 @@
 """Self-contained standard-library runtime; importing it has no application I/O."""
 
+import sys
+
+if sys.version_info < (3, 11):
+    raise ImportError("Little Harness needs Python 3.11 or newer, but this is Python %s (%s). "
+                      "Use a newer interpreter, e.g. `uv run python -m ...` or `python3.11 -m ...`."
+                      % (sys.version.split()[0], sys.executable))
+
 from .journal import ActionJournal, JournalError, JournalRecoveryRequired
 from .events import RunEvent
 from .runtime import RunLimits, RunResult, RunUsage
