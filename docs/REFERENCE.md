@@ -136,6 +136,16 @@ Resolution never executes tools, restores outputs or repairs the conversation.
 Review saved history before continuing. Journaling is a single-owner recovery
 aid, not a distributed scheduler or an exactly-once guarantee.
 
+A run that stops before its first model call has one of two journal reasons:
+
+| Stop reason | Meaning | What to do |
+| --- | --- | --- |
+| `journal_recovery_required` | Earlier actions are unfinished or uncertain | Inspect, verify and resolve them as above |
+| `journal_error` | The journal could not be reached or prepared, e.g. the database is down, the connection variable is wrong, or the network access list blocks you | Start or reach the database (`docker compose up -d mongodb` for the local one), check the variable, then rerun `init` if the database is new |
+
+`journal inspect` reports a generic failure until the journal exists; a journal is
+created by the first run that uses it.
+
 ### PostgreSQL sessions and journals (optional)
 
 `stores.postgres` provides `PostgresSessionStore` and `PostgresJournal` for
@@ -218,6 +228,33 @@ agent = Agent(model, system, tools=tools, session_store=MongoSessionStore("user-
   --journal-id ID`, with the same output and confirmation as the other journals.
 
 `compose.yaml` also starts a single-node MongoDB 9.0 replica set on `127.0.0.1:57017`.
+Start it with `docker compose up -d mongodb` before any run that uses it, including
+after a reboot or Docker restart.
+
+#### MongoDB Atlas
+
+Atlas clusters are replica sets, so the same adapters work with only a connection
+change:
+
+1. In Atlas, create a database user with `readWrite` on `little_harness` (or the
+   database you pass with `--database`), and add your IP address to the network
+   access list.
+2. Put the cluster's driver connection string in the variable you name with
+   `--uri-env` or `uri_env=`, e.g. in `.env` for the teaching CLI. Quote it, and
+   URL-encode special characters in the password:
+
+   ````sh
+   HARNESS_MONGODB_URI='mongodb+srv://USER:PASSWORD@cluster0.example.mongodb.net/?retryWrites=true&w=majority'
+   ````
+
+3. Run `init` once: `uv run python -m stores.mongodb init --uri-env HARNESS_MONGODB_URI`.
+
+`mongodb+srv://` addresses need `dnspython`, which the `mongodb` extra installs with
+pymongo. The adapters target MongoDB 9.0 and do not check the server version. Each
+journaled tool call makes majority-acknowledged writes, and each operation is limited
+to 5 seconds (`timeout=`). A distant region or a slow shared tier can therefore stop
+runs with `journal_error`. Records from another database, such as the local
+container, are not copied.
 
 ### Long-term memory (optional)
 

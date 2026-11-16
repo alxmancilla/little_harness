@@ -59,7 +59,7 @@ view below for the journal commit-before-invocation requirement.
 | `harness/__main__.py` | `python -m harness` only points users to the `stores.*` journal commands | No recovery logic of its own |
 | `stores/postgres.py`, `stores/mongodb.py` | `SessionStore`, `ActionJournal` and `MemoryStore` implementations; `python -m stores.postgres\|stores.mongodb init` and `journal inspect\|resolve` | Optional drivers; recovery never runs actions |
 | `stores/memory.py`: `memory_worker_tools`; `stores/_common.py` | Isolated-worker memory tools; shared storage CLI | Not imported by `harness` |
-| `tools/` | `package_runtime`, `check_storage_services`, `run_storage_tests`, `benchmark_storage` maintenance commands | Not imported by the runtime |
+| `tools/` | `package_runtime` (wheel/sdist builder and the project's PEP 517 build backend), `check_storage_services`, `run_storage_tests`, `benchmark_storage` maintenance commands | Not imported by the runtime |
 | `agents/teaching/` | Explicit config, tool/agent factories, arithmetic/files/retrieval tools, demos and CLI | Imports the public runtime; no configuration loading or workspace creation on import |
 | `agents/hotpotqa/` | Explicit config, restricted tools, per-agent accounting and sequential researcher/reviewer workflow | Composes plain runtime instances with public hooks; no legacy globals/private runtime overrides |
 | `agents/hotpotqa/worker.py` | Shared worker mechanics for the HotpotQA roles | Role orchestration and budgets stay in each application |

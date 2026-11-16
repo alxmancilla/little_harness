@@ -246,8 +246,11 @@ configure the database explicitly; offline examples still need neither. Memory i
 untrusted data, not an instruction or an access-control boundary. Memory writes
 use the ordinary risky-tool policy and approval gates. Timed memory tools reconnect
 inside workers; a timed-out write may have succeeded and must not be retried blindly.
-See [setup, recovery and memory](docs/REFERENCE.md#postgresql-sessions-and-journals-optional)
+See [setup, recovery and memory](docs/REFERENCE.md#postgresql-sessions-and-journals-optional),
+[MongoDB Atlas](docs/REFERENCE.md#mongodb-atlas)
 and the [local operation measurements](docs/design/STORAGE_PLAN.md#phase-6-checkpoint--review-and-measurements).
+If a run stops with `journal_error` before calling the model, the journal's database
+could not be reached; see [the stop reasons](docs/REFERENCE.md#recover-without-replaying).
 
 ## Teaching tools, retrieval and evaluation
 

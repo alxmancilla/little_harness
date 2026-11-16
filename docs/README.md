@@ -18,7 +18,7 @@ New here? Start with the [README](../README.md) or the [learning path](../LEARN.
 ## Evaluate
 
 - [Support assistant evaluation](SUPPORT_EVALUATION.md): offline cases and a human review worksheet
-- [Live baselines](BASELINES.md): first recorded results with real models
+- [Live baselines](BASELINES.md): recorded results with real models, including the current HotpotQA reference runs
 - [HotpotQA comparison](../datasets/HOTPOTQA_BASELINE.md): single agent vs. researcher/reviewer
 
 ## Design history
