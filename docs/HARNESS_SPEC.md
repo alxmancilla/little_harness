@@ -412,7 +412,6 @@ is not a returned `RunResult.status` value.
 | Trace / library session | `trace.jsonl` (`None` disables it) / no session unless supplied; missing parent directories are created on first write |
 | CLI interactive session | `session.json`, configurable with `HARNESS_SESSION` |
 | Workspace / knowledge | Teaching configuration only: `./workspace` / `./knowledge`; explicit paths or CLI environment settings |
-| Core `writable_roots` | Empty tuple; applications declare all writable roots for journal path exclusion |
 
 CLI startup loads simple `.env` assignments without shell expansion; existing shell
 values win. Importing `harness` performs no application configuration or filesystem

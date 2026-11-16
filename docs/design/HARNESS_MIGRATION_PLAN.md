@@ -35,6 +35,7 @@ it. Phase 1 does not claim a standalone distributable package.
   New regressions cover package import/run isolation, mandatory allowlists,
   separate registries, metadata/validation, custom timed workers, writable roots,
   journal sidecars, core budgets/events/policies and legacy class/loop compatibility.
+  *(Later note: writable roots and journal sidecars were removed with SQLite journals.)*
 - Fresh ten-question single-agent and multi-agent offline evaluations: **20/20
   completed, zero tool errors**, matching recorded settings and verified package
   source fingerprints. Scores remain null; these are protocol checks, not accuracy

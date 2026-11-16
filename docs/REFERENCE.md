@@ -90,7 +90,7 @@ See the [public API and execution contract](HARNESS_SPEC.md),
 Related keywords can instead be passed as optional groups from
 [harness/config.py](../harness/config.py): `observability=ObservabilityConfig(...)`
 (trace, event and `quiet` settings), `tool_config=ToolConfig(...)` (approval, policy,
-admission, output limit, timeout, writable roots, worker environment) and
+admission, output limit, timeout, worker environment) and
 `context=ContextConfig(...)` (compaction thresholds, session path or store). Each group
 is equivalent to its keywords and validated identically. Combining a group with any of
 its own keywords at a non-default value raises `TypeError`. `ToolConfig(approve=None)`

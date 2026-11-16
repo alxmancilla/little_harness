@@ -145,7 +145,6 @@ class HarnessTestCase(TemporaryDirectoryTestCase):
             model = ScriptedModel(model)
         options.setdefault("approve", lambda *_: True)
         options.setdefault("tools", self.tools)
-        options.setdefault("writable_roots", (self.config.workspace,))
         options.setdefault("trace_path", self.trace)
         options.setdefault("trace_include_content", True)  # Legacy full-trace assertions opt in explicitly.
         return Agent(model, "sys", **options)

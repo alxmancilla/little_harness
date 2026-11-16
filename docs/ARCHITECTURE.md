@@ -69,7 +69,7 @@ view below for the journal commit-before-invocation requirement.
 | `evaluation/support/` | Offline-first evaluation of the support example | Not part of the runtime; the example does not import it |
 
 Optional controls are ordinary Python objects/modules, **not separate services**.
-New applications import `harness` and supply prompts, registries and writable roots.
+New applications import `harness` and supply prompts and registries.
 Package import has no workspace/configuration side effects. Only package APIs and
 module commands are supported. The runtime directory can be copied without application or
 root files; see the [separation diagram](harness-separation.mmd) for dependencies.

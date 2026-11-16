@@ -32,7 +32,6 @@ class ToolConfig:
     tool_admission: Optional[Callable] = None
     max_tool_output: int = 8000
     tool_timeout_seconds: Optional[float] = None
-    writable_roots: tuple = ()
     worker_env: Optional[Mapping] = None
 
 

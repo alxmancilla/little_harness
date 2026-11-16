@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from unittest import mock
 
-from harness import Agent, RunLimits, ToolPolicy, ToolRegistry
+from harness import Agent, RunLimits, ToolConfig, ToolPolicy, ToolRegistry
 from tests.helpers import Model, TemporaryDirectoryTestCase, call, usage_reply as reply
 from tests.storage_fakes import FakeJournal
 
@@ -130,13 +130,11 @@ class PackageTests(TemporaryDirectoryTestCase):
         )
         self.assertEqual(child.returncode, 0, child.stderr)
 
-    def test_multiple_writable_roots_with_explicit_journal(self):
-        roots = (self.root / "first", self.root / "second")
-        journal = FakeJournal()
-        agent = self.agent(Model(reply("safe")), {}, journal=journal, writable_roots=roots)
-        self.assertEqual(agent.run_result("go").status, "completed")
-        self.assertEqual(journal.inspect(), [])
-        self.assertFalse(any(root.exists() for root in roots))
+    def test_removed_writable_roots_keyword_is_rejected(self):
+        with self.assertRaises(TypeError):
+            self.agent(Model(reply("safe")), {}, writable_roots=(self.root / "first",))
+        with self.assertRaises(TypeError):
+            ToolConfig(writable_roots=())
 
     def test_core_policy_budget_events_and_output_cap(self):
         registry = ToolRegistry()

@@ -81,3 +81,31 @@ uv run python -m evaluation.hotpotqa.evaluate --live --architecture multi-agent 
 
 Later code changes to fingerprinted runtime files make these HotpotQA runs unusable
 as `--reference`; record a fresh pair instead of comparing against them.
+
+Since this baseline, `harness/agent.py`, `harness/config.py` and
+`harness/model_clients.py` changed (removal of the unused `writable_roots` setting
+and `x-api-key` authentication for the direct `anthropic` provider), so the runs
+above no longer pass reference preflight. Neither change affects gateway requests or
+agent behaviour.
+
+### Re-recorded HotpotQA pair (claude-sonnet-5-5, 2026-11-16)
+
+Recorded on top of `65b5c0b` with those changes, through the gateway with default
+budgets, in `runs/baseline-claude-sonnet-5-5-hotpot-{single,multi}-20261116/`. The
+multi-agent run passed reference preflight against the new single-agent run with no
+comparison warnings. All 20 questions completed with zero tool errors. Use this pair
+as `--reference` for Claude; gpt-5.6-sol has not been re-recorded.
+
+| HotpotQA (10 questions) | Single-agent | Multi-agent |
+| --- | --- | --- |
+| Answer EM / F1 | 0.80 / 0.93 | 0.70 / 0.83 |
+| Supporting facts EM / F1 | 0.60 / 0.88 | 0.70 / 0.94 |
+| Joint EM / F1 | 0.50 / 0.83 | 0.50 / 0.79 |
+| Model calls | 27 | 42 |
+| Input / output tokens | 71,954 / 2,159 | 135,770 / 3,938 |
+
+Compared with the first baseline, single-agent answer EM moved 0.70 → 0.80 (one
+question) on the same inputs. With one run of ten questions that is within
+run-to-run variation, not evidence of a runtime change. The earlier finding holds:
+multi-agent improved supporting-fact selection but not answers, at about 1.9× the
+input tokens.

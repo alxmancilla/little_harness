@@ -202,7 +202,7 @@ def create_agent(model, prompt, documents, observed, trace_path, *, max_steps=12
     agent = runtime_factory(model, prompt, tools=tool_factory(documents, observed, config=config),
                             max_steps=max_steps, compact_at=sys.maxsize,
                             trace_path=trace_path, session_path=None, trace_include_content=True,
-                            max_tool_output=config.max_tool_output, writable_roots=(config.workspace,),
+                            max_tool_output=config.max_tool_output,
                             tool_admission=budget.admit, on_event=budget.observe,
                             trace_context={"role": role} if role is not None else None)
     return agent, budget

@@ -27,5 +27,4 @@ def create_tools(config):
 def create_agent(model, config, system=SYSTEM_PROMPT, **options):
     """Create a workspace explicitly; no private runtime overrides or global settings."""
     config.workspace.mkdir(parents=True, exist_ok=True)
-    return Agent(model, system, tools=create_tools(config), writable_roots=(config.workspace,),
-                 compact_at=config.compact_at, max_tool_output=config.max_tool_output, **options)
+    return Agent(model, system, tools=create_tools(config), compact_at=config.compact_at, max_tool_output=config.max_tool_output, **options)

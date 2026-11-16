@@ -76,7 +76,7 @@ def _check_response(response):
 _OBSERVABILITY_DEFAULTS = dict(trace_path="trace.jsonl", trace_context=None, trace_include_content=False,
                                on_event=None, event_include_content=False, quiet=False)
 _TOOL_DEFAULTS = dict(approve=ask_human, tool_policy=None, tool_admission=None, max_tool_output=8000,
-                      tool_timeout_seconds=None, writable_roots=(), worker_env=None)
+                      tool_timeout_seconds=None, worker_env=None)
 _CONTEXT_DEFAULTS = dict(compact_at=40000, compact_at_tokens=None, session_path=None, session_store=None)
 
 
@@ -104,7 +104,7 @@ class Agent(CompactionMixin, ToolDispatchMixin):
     def __init__(self, model, system, max_steps=12, approve=ask_human, trace_path="trace.jsonl",
                  compact_at=40000, session_path=None, *, tools, limits=None, tool_timeout_seconds=None,
                  on_event=None, event_include_content=False, quiet=False, tool_policy=None,
-                 writable_roots=(), max_tool_output=8000, tool_admission=None, trace_context=None,
+                 max_tool_output=8000, tool_admission=None, trace_context=None,
                  trace_include_content=False, compact_at_tokens=None, get_steering=None, worker_env=None,
                  session_store=None, journal=None, observability=None, tool_config=None, context=None):
         self.model, self.system, self.max_steps = model, system, max_steps
@@ -114,15 +114,14 @@ class Agent(CompactionMixin, ToolDispatchMixin):
         tc = merge_group("tool_config", tool_config, ToolConfig, dict(
             approve=approve, tool_policy=tool_policy, tool_admission=tool_admission,
             max_tool_output=max_tool_output, tool_timeout_seconds=tool_timeout_seconds,
-            writable_roots=writable_roots, worker_env=worker_env), _TOOL_DEFAULTS)
+            worker_env=worker_env), _TOOL_DEFAULTS)
         ctx = merge_group("context", context, ContextConfig, dict(
             compact_at=compact_at, compact_at_tokens=compact_at_tokens,
             session_path=session_path, session_store=session_store), _CONTEXT_DEFAULTS)
         self._configure_observability(obs["trace_path"], obs["trace_context"], obs["trace_include_content"],
                                       obs["on_event"], obs["event_include_content"], obs["quiet"])
         self._configure_tools(tools, tc["tool_policy"], tc["tool_admission"], tc["approve"],
-                              tc["max_tool_output"], tc["tool_timeout_seconds"], tc["writable_roots"],
-                              tc["worker_env"])
+                              tc["max_tool_output"], tc["tool_timeout_seconds"], tc["worker_env"])
         self._configure_context(ctx["compact_at"], ctx["compact_at_tokens"], ctx["session_path"],
                                 ctx["session_store"])
         self._configure_controls(limits, get_steering, journal)
@@ -153,7 +152,7 @@ class Agent(CompactionMixin, ToolDispatchMixin):
         self.event_callback_failed = False
 
     def _configure_tools(self, tools, tool_policy, tool_admission, approve,
-                         max_tool_output, tool_timeout_seconds, writable_roots, worker_env):
+                         max_tool_output, tool_timeout_seconds, worker_env):
         """The tool mapping and every gate that decides whether a request may run."""
         if not isinstance(tools, Mapping):
             raise TypeError("tools must be an explicit mapping; use {} for no tools")
@@ -172,7 +171,6 @@ class Agent(CompactionMixin, ToolDispatchMixin):
         self.max_tool_output = max_tool_output
         self.tool_timeout_seconds = validate_tool_timeout(tool_timeout_seconds)
         self.worker_env = validate_worker_env(worker_env)
-        self.writable_roots = tuple(Path(root).resolve() for root in writable_roots)
 
     def _configure_context(self, compact_at, compact_at_tokens, session_path, session_store):
         """Conversation persistence and compaction thresholds."""

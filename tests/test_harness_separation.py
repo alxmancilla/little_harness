@@ -140,13 +140,12 @@ class SeparationTests(TemporaryDirectoryTestCase):
             self.assertIn("unexpected argument", agent.messages[10]["content"][0]["content"])
             self.assertEqual(len(agent.journal.inspect()), 4)
 
-    def test_factory_declares_writable_root_and_enforces_policy(self):
+    def test_factory_enforces_policy(self):
         config = TeachingConfig(self.root / "workspace", self.root / "knowledge")
         agent = create_agent(Model(call("write_file", path="blocked.txt", content="no"), reply("done")),
                              config, quiet=True, trace_path=self.root / "trace.jsonl",
                              tool_policy=ToolPolicy(read_only=True))
         self.assertEqual(agent.run_result("go").usage.tool_errors, 1)
-        self.assertEqual(agent.writable_roots, (config.workspace,))
         self.assertFalse((config.workspace / "blocked.txt").exists())
 
     def test_partial_worker_rejects_non_json_configuration_and_non_importable_functions(self):

@@ -48,9 +48,9 @@ standard library. No runtime/application import depends on evaluation.
 | SEP-02 | `harness.Agent` MUST require an explicit tool mapping. `{}` means no tools. There MUST be no package-global default registry. |
 | SEP-03 | `ToolRegistry.tool(...)` MUST derive flat schemas/metadata from the function signature and register only into that registry. |
 | SEP-04 | The model callable MUST retain `(system, messages, tools, on_text=None) -> response`; block shapes, usage accounting and stop classifications MUST remain compatible. |
-| SEP-05 | Runtime paths/settings MUST be per-instance values. Application workspace protection MUST be supplied as `writable_roots`; the core MUST NOT know `HARNESS_WORKSPACE` or `HARNESS_KNOWLEDGE`. |
+| SEP-05 | Runtime paths/settings MUST be per-instance values. ~~Application workspace protection MUST be supplied as `writable_roots`;~~ the core MUST NOT know `HARNESS_WORKSPACE` or `HARNESS_KNOWLEDGE`. *(Later note: `writable_roots` was removed; it only served SQLite journal path exclusion, which ended with SQLite journals. Tools enforce their own path rules.)* |
 | SEP-06 | Allowlist -> validation -> policy -> approval -> journal -> execution ordering MUST remain unchanged, including deadline rechecks and no automatic replay/retry. |
-| SEP-07 | Journal files and sidecars MUST remain separate from trace/session files and outside every declared writable root. Callers MUST declare all application-writable roots; omission is not filesystem isolation. |
+| SEP-07 | Journal files and sidecars MUST remain separate from trace/session files and outside every declared writable root. Callers MUST declare all application-writable roots; omission is not filesystem isolation. *(Later note: superseded — journals are now database-backed `ActionJournal` stores with no local files, and `writable_roots` was removed.)* |
 | SEP-08 | Event immutability/order, observer-failure handling, uncertain outcomes, atomic session saving and subprocess cancellation MUST retain their current guarantees. |
 | SEP-09 | Only package APIs and module commands are supported. There MUST be no root aliases, compatibility agent subclasses or package-global tool registry. Applications MUST pass explicit configuration. |
 | SEP-10 | Evaluation MUST fingerprint every executable runtime file, including package initialization. Missing/changed shared hashes MUST fail reference preflight before workers/output creation. |
@@ -61,9 +61,8 @@ standard library. No runtime/application import depends on evaluation.
 `tools` is keyword-only and required; tool functions remain trusted Python code.
 `max_steps` defaults to 12 and `limits` (a `RunLimits`) to `None` (no extra budget).
 `max_tool_output` is a positive character cap (default 8000), `compact_at` defaults
-to 40000, optional keyword-only `compact_at_tokens` defaults to `None`, and
-`writable_roots` defaults to an empty tuple. Construction does not
-create those roots. Trace/session/journal I/O retains its existing run-time behavior.
+to 40000, optional keyword-only `compact_at_tokens` defaults to `None`. Construction does not
+create workspace roots. Trace/session/journal I/O retains its existing run-time behavior.
 The same keywords may instead be grouped as `observability=ObservabilityConfig(...)`,
 `tool_config=ToolConfig(...)` and `context=ContextConfig(...)` with identical defaults
 and validation; see [FR-16](../HARNESS_SPEC.md#fr-16--accept-grouped-configuration-equivalently).
