@@ -90,7 +90,7 @@ agent behaviour.
 
 ### Re-recorded HotpotQA pair (claude-sonnet-5-5, 2026-11-16)
 
-Recorded on top of `65b5c0b` with those changes, through the gateway with default
+Recorded at `d56d1f9`, through the gateway with default
 budgets, in `runs/baseline-claude-sonnet-5-5-hotpot-{single,multi}-20261116/`. The
 multi-agent run passed reference preflight against the new single-agent run with no
 comparison warnings. All 20 questions completed with zero tool errors. Use this pair
