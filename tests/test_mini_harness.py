@@ -830,6 +830,8 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(req.full_url, "https://api.anthropic.com/v1/messages")
         self.assertEqual(req.get_header("Anthropic-version"), "2023-06-01")
         self.assertEqual(req.get_header("Anthropic-workspace-id"), "wrkspc_1")
+        self.assertEqual(req.get_header("X-api-key"), "test-key")
+        self.assertIsNone(req.get_header("Authorization"))
         self.assertNotIn("tools", json.loads(req.data))
 
     def test_gateway_claude_request_matches_the_anthropic_curl_example(self):

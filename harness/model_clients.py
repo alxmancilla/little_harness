@@ -385,7 +385,8 @@ GATEWAY = "https://ai-gateway.corp.mongodb.com"
 
 # provider name: (client class, default base URL, env var holding the API key, default model, key header)
 PROVIDERS = {
-    "anthropic": (AnthropicModel, AnthropicModel.BASE_URL, "ANTHROPIC_API_KEY", "claude-sonnet-5-5", None),
+    "anthropic": (AnthropicModel, AnthropicModel.BASE_URL, "ANTHROPIC_API_KEY", "claude-sonnet-5-5",
+                  "x-api-key"),
     "openai": (OpenAIResponsesModel, OpenAIResponsesModel.BASE_URL, "OPENAI_API_KEY", None, None),
     "openai-chat": (OpenAIChatModel, OpenAIChatModel.BASE_URL, "OPENAI_API_KEY", None, None),
     # Grove's AI Gateway has one route per vendor API; "gateway" picks the route from the model name
