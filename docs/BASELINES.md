@@ -88,24 +88,28 @@ and `x-api-key` authentication for the direct `anthropic` provider), so the runs
 above no longer pass reference preflight. Neither change affects gateway requests or
 agent behaviour.
 
-### Re-recorded HotpotQA pair (claude-sonnet-5-5, 2026-11-16)
+### Re-recorded HotpotQA pairs (2026-11-16)
 
-Recorded at `d56d1f9`, through the gateway with default
-budgets, in `runs/baseline-claude-sonnet-5-5-hotpot-{single,multi}-20261116/`. The
+Recorded at `d56d1f9`, through the gateway with default budgets, in
+`runs/baseline-<model>-hotpot-{single,multi}-20261116/`. For both models the
 multi-agent run passed reference preflight against the new single-agent run with no
-comparison warnings. All 20 questions completed with zero tool errors. Use this pair
-as `--reference` for Claude; gpt-5.6-sol has not been re-recorded.
+comparison warnings, and all 20 questions completed with zero tool errors. Use these
+pairs as `--reference`.
 
-| HotpotQA (10 questions) | Single-agent | Multi-agent |
+| HotpotQA (10 questions), single / multi | claude-sonnet-5-5 | gpt-5.6-sol |
 | --- | --- | --- |
-| Answer EM / F1 | 0.80 / 0.93 | 0.70 / 0.83 |
-| Supporting facts EM / F1 | 0.60 / 0.88 | 0.70 / 0.94 |
-| Joint EM / F1 | 0.50 / 0.83 | 0.50 / 0.79 |
-| Model calls | 27 | 42 |
-| Input / output tokens | 71,954 / 2,159 | 135,770 / 3,938 |
+| Answer EM | 0.80 / 0.70 | 0.70 / 0.70 |
+| Answer F1 | 0.93 / 0.83 | 0.79 / 0.84 |
+| Supporting facts EM | 0.60 / 0.70 | 0.70 / 0.70 |
+| Supporting facts F1 | 0.88 / 0.94 | 0.92 / 0.92 |
+| Joint EM | 0.50 / 0.50 | 0.60 / 0.60 |
+| Joint F1 | 0.83 / 0.79 | 0.78 / 0.82 |
+| Model calls | 27 / 42 | 36 / 58 |
+| Input tokens | 71,954 / 135,770 | 64,963 / 140,232 |
+| Output tokens | 2,159 / 3,938 | 2,470 / 4,038 |
 
-Compared with the first baseline, single-agent answer EM moved 0.70 → 0.80 (one
-question) on the same inputs. With one run of ten questions that is within
-run-to-run variation, not evidence of a runtime change. The earlier finding holds:
-multi-agent improved supporting-fact selection but not answers, at about 1.9× the
-input tokens.
+Compared with the first baseline, Claude single-agent answer EM moved 0.70 → 0.80
+(one question) and GPT multi-agent answer F1 moved 0.79 → 0.84, on the same inputs.
+With one run of ten questions that is within run-to-run variation, not evidence of a
+runtime change. The earlier finding holds: multi-agent did not improve answer EM for
+either model, at about 1.9× (Claude) and 2.2× (GPT) the input tokens.
