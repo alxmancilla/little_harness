@@ -17,3 +17,10 @@ postgres = [
 mongodb = [
     "pymongo>=4.19,<5",
 ]
+
+# In-tree, standard-library-only backend: installs from git or a checkout need no
+# downloads. It packages `harness` and `stores`; see tools/package_runtime.py.
+[build-system]
+requires = []
+build-backend = "tools.package_runtime"
+backend-path = ["."]

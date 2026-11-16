@@ -291,8 +291,10 @@ Settled in Phase 0 of the [plan](design/STORAGE_PLAN.md):
 1. **Dependency declaration:** `pyproject.toml` with no runtime dependencies and two
    optional extras, `postgres` (`psycopg[binary]>=3.3,<4`) and `mongodb`
    (`pymongo>=4.19,<5`), locked in `uv.lock`. Install with
-   `uv sync --extra postgres --extra mongodb`.
-2. **Package location:** `stores/` inside this repository, not published separately.
+   `uv sync --extra postgres --extra mongodb`. Applications installing the package
+   use `little-harness[postgres]` or `little-harness[mongodb]`.
+2. **Package location:** `stores/` inside this repository, shipped in the same
+   `little-harness` distribution as `harness`, not published separately.
 3. **Memory limits:** as in ST-04: 2,000 characters per memory, 10,000 memories per
    namespace by default.
 4. **Local and CI databases:** `compose.yaml` (development only) and

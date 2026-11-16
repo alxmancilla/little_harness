@@ -127,17 +127,30 @@ Inspect status as well as answer text: a retained answer does not imply completi
 
 ### Use it in another project
 
-Copy the `harness/` directory into your project, or install the wheel attached to
-each [release](https://github.com/alxmancilla/little_harness/releases). To build the
-wheel yourself (only `harness/`, no dependencies, standard library alone):
+Install from GitHub with pip, uv or any tool that reads `pyproject.toml`. The build
+uses only the standard library, so nothing else is downloaded:
 
 ````sh
-python3 -m tools.package_runtime --output ~/wheels
+python3 -m pip install "little-harness @ git+https://github.com/alxmancilla/little_harness.git@main"
+uv add "little-harness @ git+https://github.com/alxmancilla/little_harness.git@main"
 ````
 
-Then, in the other project's virtual environment:
+Add `[postgres]` or `[mongodb]` after `little-harness` to also install a database
+driver for the [`stores`](#optional-database-storage-and-memory) adapters, e.g.
+`"little-harness[postgres] @ git+https://..."`. Pin to a commit or a later release
+tag for repeatable installs; tags up to `v0.2.0` predate the build backend and cannot
+be installed this way. The package installs two imports:
+`harness` (the runtime, standard library only) and `stores` (the optional adapters;
+each needs its driver only when used). Labs, examples, datasets and evaluations are
+not installed.
+
+You can also install the wheel attached to each
+[release](https://github.com/alxmancilla/little_harness/releases), or copy the
+`harness/` directory (and `stores/`, if needed) into your project. To build the wheel
+and source archive yourself:
 
 ````sh
+python3 -m tools.package_runtime --output ~/wheels --sdist
 python3 -m pip install --no-index --no-deps ~/wheels/little_harness-0.2.0-py3-none-any.whl
 ````
 
@@ -303,7 +316,7 @@ for trace content opt-ins and history-compaction behavior.
 | [examples/inventory_agent.py](examples/inventory_agent.py) | Independent application using the public runtime API |
 | [examples/support_agent.py](examples/support_agent.py) | Support assistant with its fictional knowledge in `examples/support_knowledge/` |
 | [lessons/](lessons/) | Guided offline labs, learner exercises, checks and reference solutions; start at [LEARN.md](LEARN.md) |
-| [tools/](tools/) | Runtime wheel builder, storage service check, storage test runner and storage benchmark |
+| [tools/](tools/) | Wheel/sdist builder and build backend, storage service check, storage test runner and storage benchmark |
 | [compose.yaml](compose.yaml) | Local PostgreSQL 18 and MongoDB 9.0 for the storage tests |
 | [tests/](tests/) | Offline regressions; database storage suites skip unless databases are configured; reusable fixtures in `tests/helpers.py` |
 | [datasets/](datasets/) | Dataset guides and the attributed ten-question HotpotQA demo |

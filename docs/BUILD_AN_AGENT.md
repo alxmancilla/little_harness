@@ -146,21 +146,30 @@ can also disclose information; none of these flags is general secret redaction.
 
 ## Reuse without a framework
 
-Copy the complete `harness/` directory into your project; no installation is required.
-For optional installation, build a pure-Python wheel with the standard library:
+Install from GitHub, or copy the complete `harness/` directory into your project; no
+installation is required for a copy:
+
+````sh
+python3 -m pip install "little-harness @ git+https://github.com/alxmancilla/little_harness.git"
+````
+
+`pyproject.toml` names the in-tree, standard-library builder in
+`tools/package_runtime.py` as its build backend, so pip and uv build the package
+without downloading build tools, and `pip install -e .` works in a checkout. To build
+the wheel and source archive directly:
 
 ````sh
 package_dir=$(mktemp -d)
-python3 -m tools.package_runtime --output "$package_dir"
+python3 -m tools.package_runtime --output "$package_dir" --sdist
 python3 -m pip install --no-index --no-deps "$package_dir"/little_harness-*.whl
 ````
 
-Use your own virtual environment for installation. The builder packages only runtime
-Python source and wheel metadata, records file hashes and refuses overwrites. It
-does not require a build backend or third-party build packages. Labs, application
-examples, datasets and secrets are excluded. This is a local distribution utility,
-not a release/publishing system; the wheel includes the MIT `LICENSE`. Update its
-version before publishing a changed release. The import remains `harness`.
+Use your own virtual environment for installation. The package contains `harness`
+(the runtime) and `stores` (optional database adapters, with drivers declared as the
+`postgres` and `mongodb` extras), plus wheel metadata, file hashes and the MIT
+`LICENSE`. Labs, application examples, datasets, evaluations and secrets are
+excluded. The builder refuses overwrites; update the version before publishing a
+changed release.
 
 ## Evaluate the application, not only the loop
 

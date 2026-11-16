@@ -127,8 +127,9 @@ Supported embedding surface (validated by teaching, HotpotQA and inventory clien
   workspace setup, dataset loading or evaluation stages.
 - Root compatibility imports/commands are removed. Applications use `harness`
   and package module commands, not mutable globals. The copied runtime
-  directory is self-contained; the optional standard-library wheel builder in
-  `tools/package_runtime.py` packages only runtime source and installation metadata.
+  directory is self-contained; the standard-library builder and PEP 517 backend in
+  `tools/package_runtime.py` packages only `harness`, the optional `stores` adapters
+  and installation metadata.
 
 The independent [inventory example](../examples/inventory_agent.py) exercises this
 surface without any `agents/`, evaluation or root application files. Changes to
