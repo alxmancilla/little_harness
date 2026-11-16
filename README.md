@@ -131,15 +131,14 @@ Install from GitHub with pip, uv or any tool that reads `pyproject.toml`. The bu
 uses only the standard library, so nothing else is downloaded:
 
 ````sh
-python3 -m pip install "little-harness @ git+https://github.com/alxmancilla/little_harness.git@main"
-uv add "little-harness @ git+https://github.com/alxmancilla/little_harness.git@main"
+python3 -m pip install "little-harness @ git+https://github.com/alxmancilla/little_harness.git@v0.2.0"
+uv add "little-harness @ git+https://github.com/alxmancilla/little_harness.git@v0.2.0"
 ````
 
 Add `[postgres]` or `[mongodb]` after `little-harness` to also install a database
 driver for the [`stores`](#optional-database-storage-and-memory) adapters, e.g.
-`"little-harness[postgres] @ git+https://..."`. Pin to a commit or a later release
-tag for repeatable installs; tags up to `v0.2.0` predate the build backend and cannot
-be installed this way. The package installs two imports:
+`"little-harness[postgres] @ git+https://..."`. Tags before `v0.2.0` predate the
+build backend and cannot be installed this way. The package installs two imports:
 `harness` (the runtime, standard library only) and `stores` (the optional adapters;
 each needs its driver only when used). Labs, examples, datasets and evaluations are
 not installed.
