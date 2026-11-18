@@ -91,9 +91,9 @@ continues. Examine the report before choosing whether to run anything again.
 | `cases.json` | Full frozen draft dataset, including host-only expectations |
 | `inputs.json` | Selected label-free inputs actually shown to agents |
 | `evidence.json` | Frozen approved support notes and product catalog |
-| `results.jsonl` | Per-case execution status, raw answer, validated recommendation, checks, tool requests, timing and usage |
+| `results.jsonl` | Per-case execution status, raw answer, validated recommendation, checks with their `rationales`, separate `trace_checks`, tool requests, timing and usage |
 | `cXX/trace.jsonl` | Metadata-only execution trace for an attempted case |
-| `summary.json`, `report.md` | Concise automated findings and resource totals |
+| `summary.json`, `report.md` | Concise automated findings, trace-check counts, why checks failed and resource totals |
 | `review.json` | Human-review worksheet; every judgment starts `null` |
 
 Per-case model-configuration hashes help detect changed recorded settings without

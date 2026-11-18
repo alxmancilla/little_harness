@@ -215,7 +215,8 @@ agent = Agent(model, system, tools=tools, session_store=MongoSessionStore("user-
   (`--database` to change it), each with a schema validator. Every message is its own
   document holding JSON text, so keys chosen by the model never become field names.
 - **Least privilege.** After `init`, the application's user needs only `readWrite` on
-  that database.
+  that database. That role also lets startup add indexes introduced by later releases
+  to the adapter's own collections; nothing else is created or altered.
 - **Connections.** Use TLS. Connecting is limited to 10 seconds and each operation to
   5 (`timeout=`); writes are acknowledged by a majority and journaled. One client is
   shared per connection string; pass `client=` to use your own `MongoClient` with
@@ -447,7 +448,7 @@ python3 -m unittest -v tests.test_first_principles_lab tests.test_learning_labs
 python3 -m unittest -v tests.test_learning_onboarding
 python3 -m unittest -v tests.test_learning_capstone
 python3 -m unittest -v tests.test_tool_contracts tests.test_trace_privacy tests.test_support_agent tests.test_runtime_distribution
-python3 -m unittest -v tests.test_support_evaluation
+python3 -m unittest -v tests.test_support_evaluation tests.test_evaluation_scorers
 python3 -m unittest -v tests.test_memory tests.test_storage_conformance
 python3 -m unittest -v tests.test_agent_config tests.test_tool_policy tests.test_harness_events tests.test_storage_memory_workers
 python3 -m unittest -v tests.test_docs

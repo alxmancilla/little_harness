@@ -82,6 +82,11 @@ uv run python -m evaluation.hotpotqa.evaluate --live --architecture multi-agent 
 Later code changes to fingerprinted runtime files make these HotpotQA runs unusable
 as `--reference`; record a fresh pair instead of comparing against them.
 
+To list which cases changed between two saved runs (for example the two models'
+support runs), use `uv run python -m evaluation.compare runs/A runs/B`. It reads only
+saved results and traces and makes no model calls. Runs recorded before failure
+reasons and trace checks were added simply show none.
+
 Since this baseline, `harness/agent.py`, `harness/config.py` and
 `harness/model_clients.py` changed (removal of the unused `writable_roots` setting
 and `x-api-key` authentication for the direct `anthropic` provider), so the runs

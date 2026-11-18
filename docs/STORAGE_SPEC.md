@@ -197,7 +197,8 @@ Each journal MUST meet FR-08 exactly:
 - Explicit setup commands create schemas for deployments whose runtime role has no
   DDL rights: `python -m stores.postgres init --dsn-env NAME` and
   `python -m stores.mongodb init --uri-env NAME`. At runtime, `prepare()` then only
-  checks.
+  checks, except that the MongoDB adapter adds indexes introduced by later releases to
+  collections it already owns (see 5.2).
 
 ### ST-07 — Handle connections and secrets safely
 

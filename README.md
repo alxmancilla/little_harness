@@ -216,6 +216,8 @@ To score whole conversations (follow-ups, corrections, added constraints), run t
 multi-turn scenarios: `python3 -m evaluation.support.multiturn --output runs/support-multiturn-01`.
 Both runners are offline by default, preserve prior runs and separate mechanical
 checks from unscored human review. Paid model calls require explicit `--live`.
+To see what changed between two runs, case by case, run
+`python3 -m evaluation.compare runs/support-smoke-01 runs/support-smoke-02`.
 
 ### Execution controls
 
@@ -315,6 +317,7 @@ for trace content opt-ins and history-compaction behavior.
 | [agents/hotpotqa/](agents/hotpotqa/) | Restricted question-answering tools, single-agent and researcher/reviewer workflows, shared worker helpers |
 | [evaluation/hotpotqa/](evaluation/hotpotqa/) | Dataset preparation, per-question execution, host-only scoring and comparisons |
 | [evaluation/support/](evaluation/support/) | Support assistant evaluation: 17 single-turn cases and 5 multi-turn scenarios |
+| [evaluation/scorers.py](evaluation/scorers.py), [evaluation/compare.py](evaluation/compare.py) | Shared check functions, trace checks and offline run-to-run comparison |
 | [examples/inventory_agent.py](examples/inventory_agent.py) | Independent application using the public runtime API |
 | [examples/support_agent.py](examples/support_agent.py) | Support assistant with its fictional knowledge in `examples/support_knowledge/` |
 | [lessons/](lessons/) | Guided offline labs, learner exercises, checks and reference solutions; start at [LEARN.md](LEARN.md) |
