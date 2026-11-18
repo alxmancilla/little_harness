@@ -140,6 +140,32 @@ class MongoMemoryTests(DatabasePerTest, MemoryStoreConformanceTests, TemporaryDi
         with self.assertRaises(mongodb.PyMongoError):
             self.db.lh_memories.insert_one({"text": "missing required fields"})
 
+    def test_quota_uses_a_maintained_count_through_adds_deletes_and_purges(self):
+        store = self.make_memory_store("counted", quota=3)
+        first = store.add("n", "one", kind="note", created_by="application")
+        store.add("n", "two", kind="note", created_by="application")
+        self.assertFalse(store.delete("n", "missing"))
+        self.assertTrue(store.delete("n", first))
+        store.add("n", "three", kind="note", created_by="application")
+        store.add("n", "four", kind="note", created_by="application")
+        with self.assertRaises(MemoryStoreError):
+            store.add("n", "five", kind="note", created_by="application")
+        counts = [row["count"] for row in self.db.lh_memory_namespaces.find({"store_id": "counted"})]
+        self.assertEqual(counts, [3])
+        self.assertEqual(store.purge("n"), 3)
+        store.add("n", "again", kind="note", created_by="application")
+        self.assertEqual(self.db.lh_memory_namespaces.find_one({"store_id": "counted"})["count"], 1)
+
+    def test_namespaces_written_before_counts_existed_are_counted_once(self):
+        store = self.make_memory_store("legacy", quota=3)
+        for text in ("one", "two"):
+            store.add("n", text, kind="note", created_by="application")
+        self.db.lh_memory_namespaces.update_many({}, {"$unset": {"count": ""}})
+        store.add("n", "three", kind="note", created_by="application")
+        self.assertEqual(self.db.lh_memory_namespaces.find_one({"store_id": "legacy"})["count"], 3)
+        with self.assertRaises(MemoryStoreError):
+            store.add("n", "four", kind="note", created_by="application")
+
 
 @needs_database
 class MongoJournalTests(DatabasePerTest, JournalConformanceTests, TemporaryDirectoryTestCase):
@@ -186,6 +212,58 @@ class MongoJournalTests(DatabasePerTest, JournalConformanceTests, TemporaryDirec
         holder.commit_transaction()
         thread.join(10)
         self.assertEqual(outcome, {"result": "blocked"})
+
+    def explain_unresolved(self, name):
+        """Examined keys/documents of the pre-dispatch read, as begin issues it."""
+        journal = self.make_journal(name)
+        captured = {}
+        real_find = mongodb.pymongo.collection.Collection.find
+
+        def find(collection, *args, **kwargs):
+            if collection.name == "lh_journal_actions":
+                captured["filter"] = args[0]
+            return real_find(collection, *args, **kwargs)
+
+        with mock.patch.object(mongodb.pymongo.collection.Collection, "find", find):
+            journal._run(journal._unresolved, transaction=False)
+        stats = self.db.lh_journal_actions.find(captured["filter"]).explain()["executionStats"]
+        return stats["totalKeysExamined"], stats["totalDocsExamined"]
+
+    def test_settled_history_is_not_read_before_dispatch(self):
+        journal = self.make_journal("history")
+        journal.prepare()
+        for number in range(40):
+            action = journal.begin(f"run-{number}", "call", "probe", False)
+            journal.finish(action, "completed")
+            journal.close_run(f"run-{number}")
+        self.assertEqual(self.explain_unresolved("history"), (0, 0))
+        open_action = journal.begin("open", "call", "probe", False)
+        keys, documents = self.explain_unresolved("history")
+        self.assertLessEqual(documents, 2)  # Only the open run's action, via either matching branch.
+        journal.finish(open_action, "outcome_unknown", outcome_unknown=True)
+        journal.close_run("open")
+        self.assertEqual([a["action_id"] for a in journal.inspect(pending_only=True)], [open_action])
+        with self.assertRaises(JournalRecoveryRequired):
+            journal.begin("next", "call", "probe", False)
+
+    def test_inspect_uses_an_index_for_its_sort(self):
+        journal = self.make_journal("sorted")
+        journal.prepare()
+        for number in range(30):
+            journal.finish(journal.begin("run", f"call-{number}", "probe", False), "completed")
+        plan = self.db.lh_journal_actions.find({"journal_id": "sorted"}).sort(
+            [("started_at", -1), ("_id", -1)]).limit(5).explain()
+        self.assertNotIn('"stage": "SORT"', json.dumps(plan["queryPlanner"]["winningPlan"]))
+        self.assertEqual(plan["executionStats"]["totalDocsExamined"], 5)
+        self.assertEqual(len(journal.inspect(limit=5)), 5)
+
+    def test_existing_deployments_gain_new_indexes_on_prepare_only(self):
+        self.make_journal("upgrade").prepare()
+        self.db.lh_journal_actions.drop_index("journal_id_1_started_at_-1__id_-1")
+        self.make_journal("upgrade").inspect()  # Read-only commands never alter storage.
+        self.assertNotIn("journal_id_1_started_at_-1__id_-1", self.db.lh_journal_actions.index_information())
+        self.make_journal("upgrade").prepare()
+        self.assertIn("journal_id_1_started_at_-1__id_-1", self.db.lh_journal_actions.index_information())
 
     def test_process_killed_after_begin_blocks_the_next_task_before_any_model_call(self):
         child = self.run_child("""

@@ -49,23 +49,34 @@ COLLECTIONS = {
         "lh_sessions": ({"_id": STRING, "revision": INT, "message_count": INT, "compaction": NULLABLE("string")},
                         []),
         "lh_session_messages": ({"session_id": STRING, "idx": INT, "message": STRING,
-                                 "sha256": {"bsonType": "binData"}}, [([("session_id", 1), ("idx", 1)], True)])},
+                                 "sha256": {"bsonType": "binData"}}, [([("session_id", 1), ("idx", 1)], {"unique": True})])},
     "journal": {
         "lh_journals": ({"_id": STRING, "seq": INT}, []),
         "lh_journal_runs": ({"journal_id": STRING, "run_id": STRING, "closed": BOOL},
-                            [([("journal_id", 1), ("run_id", 1)], True)]),
+                            [([("journal_id", 1), ("run_id", 1)], {"unique": True}),
+                             ([("journal_id", 1), ("closed", 1)], {})]),
+        # Only actions that can block a run are looked up before dispatch: still started,
+        # outcome unknown, or in a run that never closed. The partial indexes hold just the
+        # first two, so begin's cost does not grow with the journal's settled history.
         "lh_journal_actions": ({"_id": STRING, "journal_id": STRING, "run_id": STRING, "tool_call_id": STRING,
                                 "tool_name": STRING, "risky": BOOL, "started_at": DATE, "finished_at": NULLABLE("date"),
                                 "status": STRING, "outcome_unknown": BOOL, "resolution": NULLABLE("string"),
                                 "resolved_at": NULLABLE("date")},
-                               [([("journal_id", 1), ("resolution", 1)], False)])},
+                               [([("journal_id", 1), ("started_at", -1), ("_id", -1)], {}),
+                                ([("journal_id", 1), ("run_id", 1)], {}),
+                                ([("journal_id", 1), ("status", 1)],
+                                 {"partialFilterExpression": {"status": "started"}}),
+                                ([("journal_id", 1), ("outcome_unknown", 1)],
+                                 {"partialFilterExpression": {"outcome_unknown": True}})])},
     "memory": {
+        # count is maintained with each write; namespaces saved before it existed get it on their next write.
         "lh_memory_namespaces": ({"_id": STRING, "store_id": STRING, "namespace": STRING, "seq": INT}, []),
         "lh_memories": ({"_id": STRING, "store_id": STRING, "namespace": STRING, "text": STRING,
                          "kind": STRING, "created_by": STRING, "created_at": DATE, "run_id": NULLABLE("string"),
                          "words": {"bsonType": "array", "items": STRING}},
-                        [([("store_id", 1), ("namespace", 1), ("words", 1)], False),
-                         ([("store_id", 1), ("namespace", 1), ("created_at", -1), ("_id", 1)], False)])}}
+                        [([("store_id", 1), ("namespace", 1), ("words", 1)], {}),
+                         ([("store_id", 1), ("namespace", 1), ("created_at", -1), ("_id", 1)], {})])}}
+OPTIONAL_FIELDS = {"lh_memory_namespaces": {"count": INT}}
 
 
 def _now():
@@ -146,20 +157,27 @@ class _MongoStorage:
         if record is not None:
             if (record.get("application"), record.get("schema_version")) != (APPLICATION, SCHEMA_VERSION):
                 raise self._error()
+            if create:
+                self._create_indexes(db)  # Idempotent; adds indexes introduced after these collections were created.
             return
         existing = set(db.list_collection_names())
         if not create or existing & set(COLLECTIONS[self.component]):
             raise self._error()
-        for collection, (fields, indexes) in COLLECTIONS[self.component].items():
+        for collection, (fields, _) in COLLECTIONS[self.component].items():
             db.create_collection(collection, validator={"$jsonSchema": {
-                "bsonType": "object", "required": list(fields), "properties": fields}})
-            for keys, unique in indexes:
-                db[collection].create_index(keys, unique=unique)
+                "bsonType": "object", "required": list(fields),
+                "properties": {**fields, **OPTIONAL_FIELDS.get(collection, {})}}})
+        self._create_indexes(db)
         try:
             db.lh_meta.insert_one({"_id": self.component, "application": APPLICATION,
                                    "schema_version": SCHEMA_VERSION})
         except DuplicateKeyError:
             raise self._error() from None
+
+    def _create_indexes(self, db):
+        for collection, (_, indexes) in COLLECTIONS[self.component].items():
+            for keys, options in indexes:
+                db[collection].create_index(keys, **options)
 
     def ensure_schema(self, *, create=True):
         """Check this component's collections, creating them where none exist when allowed."""
@@ -267,10 +285,20 @@ class MongoMemoryStore(_MongoStorage):
             self.prepare()
 
     def _serialize(self, db, session, namespace):
+        """Bump the namespace's counter (serializing writers) and return its memory count.
+
+        The count is computed once for namespaces written before it was maintained."""
         key = hashlib.sha256((self.name + "\0" + namespace).encode()).hexdigest()
-        db.lh_memory_namespaces.update_one(
+        row = db.lh_memory_namespaces.find_one_and_update(
             {"_id": key}, {"$setOnInsert": {"store_id": self.name, "namespace": namespace}, "$inc": {"seq": 1}},
-            upsert=True, session=session)
+            upsert=True, return_document=pymongo.ReturnDocument.AFTER, session=session)
+        count = row.get("count")
+        if count is None:
+            count = db.lh_memories.count_documents({"store_id": self.name, "namespace": namespace}, session=session)
+        return key, count
+
+    def _set_count(self, db, session, key, count):
+        db.lh_memory_namespaces.update_one({"_id": key}, {"$set": {"count": count}}, session=session)
 
     @staticmethod
     def _record(row):
@@ -286,13 +314,14 @@ class MongoMemoryStore(_MongoStorage):
         memory_id = uuid4().hex
 
         def write(db, session):
-            self._serialize(db, session, namespace)
-            scope = {"store_id": self.name, "namespace": namespace}
-            if db.lh_memories.count_documents(scope, session=session) >= self.quota:
+            key, count = self._serialize(db, session, namespace)
+            if count >= self.quota:
                 raise MemoryStoreError()
+            scope = {"store_id": self.name, "namespace": namespace}
             db.lh_memories.insert_one({"_id": memory_id, **scope, "text": text, "kind": kind,
                                        "created_by": created_by, "created_at": _now(), "run_id": run_id,
                                        "words": sorted(set(_WORDS.findall(text.lower())))}, session=session)
+            self._set_count(db, session, key, count + 1)
 
         self._run(write)
         return memory_id
@@ -322,9 +351,11 @@ class MongoMemoryStore(_MongoStorage):
         self._ensure()
 
         def write(db, session):
-            self._serialize(db, session, namespace)
-            return bool(db.lh_memories.delete_one({"_id": memory_id, "store_id": self.name,
-                                                   "namespace": namespace}, session=session).deleted_count)
+            key, count = self._serialize(db, session, namespace)
+            deleted = db.lh_memories.delete_one({"_id": memory_id, "store_id": self.name,
+                                                 "namespace": namespace}, session=session).deleted_count
+            self._set_count(db, session, key, count - deleted)
+            return bool(deleted)
 
         return self._run(write)
 
@@ -333,9 +364,11 @@ class MongoMemoryStore(_MongoStorage):
         self._ensure()
 
         def write(db, session):
-            self._serialize(db, session, namespace)
-            return db.lh_memories.delete_many({"store_id": self.name, "namespace": namespace},
-                                              session=session).deleted_count
+            key, _ = self._serialize(db, session, namespace)
+            deleted = db.lh_memories.delete_many({"store_id": self.name, "namespace": namespace},
+                                                 session=session).deleted_count
+            self._set_count(db, session, key, 0)
+            return deleted
 
         return self._run(write)
 
@@ -378,8 +411,19 @@ class MongoJournal(_MongoStorage):
             not closed.get(a["run_id"], False) or a["outcome_unknown"] or a["status"] == "started")]
 
     def _unresolved(self, db, session):
-        return list(db.lh_journal_actions.find({"journal_id": self.name, "resolution": None}, session=session)
-                    .sort([("started_at", DESCENDING), ("_id", DESCENDING)]))
+        """Unresolved actions that may need recovery; settled actions in closed runs are never read.
+
+        Callers still apply _pending, so this narrows the read without changing the rule."""
+        open_runs = [run["run_id"] for run in db.lh_journal_runs.find(
+            {"journal_id": self.name, "closed": False}, {"run_id": 1}, session=session)]
+        branches = [{"status": "started"}, {"outcome_unknown": True}]
+        if open_runs:
+            branches.append({"run_id": {"$in": open_runs}})
+        # Only $or at the top level: each branch then gets its own index. A shared outer journal_id
+        # condition lets the planner scan the whole journal instead.
+        return list(db.lh_journal_actions.find(
+            {"$or": [{"journal_id": self.name, "resolution": None, **branch} for branch in branches]},
+            session=session).sort([("started_at", DESCENDING), ("_id", DESCENDING)]))
 
     def assert_ready(self):
         self.prepare()
