@@ -25,6 +25,17 @@ def markdown_report(summary, rows):
     for row in rows:
         values = ["yes" if value else "no" for value in row["checks"].values()]
         lines.append(f"| {row['id']} | {row['status']} | " + " | ".join(values) + " |")
+    trace = summary.get("trace_checks_passed", {})
+    if trace:
+        lines += ["", "Trace checks (metadata only; reported separately, never counted as passes): "
+                  + "; ".join(f"{key} {count}/{summary['cases']}" for key, count in trace.items())]
+    failing = [(row["id"], row.get("rationales", {})) for row in rows
+               if not all(row["checks"].values()) or not all(row.get("trace_checks", {}).values())]
+    if failing:
+        lines += ["", "## Why checks failed", ""]
+        for identifier, notes in failing:
+            reasons = "; ".join(f"{key}: {text}" for key, text in notes.items()) or "no rationale recorded"
+            lines.append(f"- **{identifier}**: {reasons}")
     usage = summary["usage"]
     lines += ["", f"Model calls: {usage['model_calls']}; tool attempts: {usage['tool_calls_attempted']}; "
               f"tool errors: {usage['tool_errors']}",

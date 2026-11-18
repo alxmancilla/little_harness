@@ -15,6 +15,8 @@ from pathlib import Path
 from examples import support_agent as app
 from harness import ModelConfigError, RunLimits, make_model
 
+from evaluation.scorers import TRACE_SCORERS, rationales, read_trace, run_scorers, values
+
 from .dataset import load_scenarios
 from .evaluate import json_bytes, model_fingerprint, write_json
 from .scoring import score_result
@@ -40,16 +42,19 @@ def evaluate_scenario(scenario, model, evidence, output, limits):
             turns.append({"status": "not_run", "checks": dict.fromkeys(TURN_CHECKS, False), "usage": None})
             continue
         result = agent.run_result(json.dumps(turn["input"]))
-        value, checks = score_result(result, agent.messages, turn)
+        value, checks, notes = score_result(result, agent.messages, turn)
         ran.append(turn)
         stopped = result.status != "completed"
         turns.append({"status": "invalid_output" if result.status == "completed" and value is None
                       else result.status, "stop_reason": result.stop_reason, "answer": result.answer,
-                      "recommendation": value, "checks": checks, "usage": asdict(result.usage)})
+                      "recommendation": value, "checks": checks, "rationales": notes,
+                      "usage": asdict(result.usage)})
     trajectory = {"all_turns_completed": all(t["status"] == "completed" for t in turns),
                   "history_retained": history_retained(agent.messages, ran)}
+    trace_scores = run_scorers(TRACE_SCORERS, trace=read_trace(output / "trace.jsonl"))
     return {"id": scenario["id"], "turns": turns, "trajectory": trajectory,
             "passed": all(trajectory.values()) and all(all(t["checks"].values()) for t in turns),
+            "trace_checks": values(trace_scores), "trace_rationales": rationales(trace_scores),
             "model_config_sha256": model_fingerprint(model)}
 
 

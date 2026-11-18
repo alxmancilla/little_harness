@@ -114,6 +114,29 @@ Unknown token usage stays `null`, never zero. Resource totals become unknown if
 an attempted case lacks measurements; cases never started consume zero known calls.
 Elapsed time summarizes agent runs, not a hard wall-clock budget for the batch.
 
+### Rationales, trace checks and comparing runs
+
+Checks are small `@scorer` functions in [evaluation/scorers.py](../evaluation/scorers.py)
+that return a value and a short reason. Each row's `rationales` explains failures (for
+example `missing: warranty.md`), and `report.md` lists them under "Why checks failed".
+Parser errors are never copied into rationales.
+
+`trace_checks` are computed from the metadata trace only: a trace was recorded, a tool
+succeeded before the answer, no tool errors, no policy denials and a normal `end_turn`.
+They are reported separately and **never** count toward `automated_passes`.
+
+Compare two saved runs case by case, or rescore an old run's traces, without a model:
+
+````sh
+python3 -m evaluation.compare runs/support-a runs/support-b
+python3 -m evaluation.compare runs/support-a --traces
+````
+
+The comparison lists fixed/regressed cases, flipped checks, token and tool-call deltas
+and both trace paths. It also accepts multi-turn and HotpotQA runs. It is descriptive:
+confirm both `run.json` files show the same cases, evidence and limits first.
+`--output` writes to a new file only.
+
 **Artifacts still contain content:** metadata-only traces do not redact raw answers,
 recommendations, questions or evidence stored in the other files. Keep cases
 fictional/non-sensitive and control output-directory permissions and retention.

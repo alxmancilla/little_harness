@@ -67,6 +67,7 @@ view below for the journal commit-before-invocation requirement.
 | `examples/inventory_agent.py` | Unrelated read-only inventory application | Imports only public `harness` exports and stdlib; copyable without teaching/HotpotQA/evaluation files |
 | `examples/support_agent.py` | Narrow support assistant; offline by default, `--live` enables paid calls | Public `harness` API and stdlib only; evidence, output validation and draft approval are application-owned |
 | `evaluation/support/` | Offline-first evaluation of the support example | Not part of the runtime; the example does not import it |
+| `evaluation/scorers.py`, `compare.py` | Shared `@scorer` interface, metadata trace scorers and offline run-to-run comparison | Code checks only; never calls a model or edits a run |
 
 Optional controls are ordinary Python objects/modules, **not separate services**.
 New applications import `harness` and supply prompts and registries.

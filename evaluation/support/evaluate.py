@@ -12,6 +12,8 @@ from examples import support_agent as app
 from harness import MemoryRecord, ModelConfigError, RunLimits, make_model
 from harness.memory import _WORDS, _rank
 
+from evaluation.scorers import TRACE_SCORERS, rationales, read_trace, run_scorers, values
+
 from .dataset import load_cases
 from .report import markdown_report, review_template
 from .scoring import score_result, summarize
@@ -37,6 +39,7 @@ def skipped_result(case, status="not_run"):
             "stop_reason": status, "answer": None, "recommendation": None,
             "checks": {"valid_output": False, "escalation_matches_draft": False, "required_sources_cited": False,
                        "memory_exposed": False},
+            "rationales": {"status": status}, "trace_checks": {},
             "usage": {key: 0 for key in ("model_calls", "tool_calls_requested", "tool_calls_attempted",
                                         "tool_errors", "input_tokens", "output_tokens")},
             "elapsed_seconds": 0, "tools_requested": [], "model_config_sha256": None}
@@ -81,7 +84,7 @@ def evaluate_case(case, model, evidence, output, limits):
     agent = app.create_agent(model, documents, evidence["products"], trace_path=output / "trace.jsonl",
                              limits=limits, trace_include_content=False, **memory_options)
     result = agent.run_result(json.dumps(case["input"]))
-    value, checks = score_result(result, agent.messages, case)
+    value, checks, notes = score_result(result, agent.messages, case)
     requested = [block["name"] for message in agent.messages
                  if message["role"] == "assistant" and isinstance(message["content"], list)
                  for block in message["content"] if block["type"] == "tool_use"]
@@ -95,9 +98,14 @@ def evaluate_case(case, model, evidence, output, limits):
                 if block["type"] == "tool_result" and block["tool_use_id"] in recall_ids and not block.get("is_error"):
                     recalled.update(item["text"] for item in json.loads(block["content"])["memories"])
     checks["memory_exposed"] = set(memories) <= recalled
+    if not checks["memory_exposed"]:
+        notes["memory_exposed"] = f"{len(set(memories) - recalled)} case memories never recalled"
+    trace_scores = run_scorers(TRACE_SCORERS, trace=read_trace(output / "trace.jsonl"))
+    notes.update({f"trace:{name}": text for name, text in rationales(trace_scores).items()})
     return {"id": case["id"], "status": "invalid_output" if result.status == "completed" and value is None
             else result.status, "execution_status": result.status, "stop_reason": result.stop_reason,
-            "answer": result.answer, "recommendation": value, "checks": checks,
+            "answer": result.answer, "recommendation": value, "checks": checks, "rationales": notes,
+            "trace_checks": values(trace_scores),
             "usage": asdict(result.usage), "elapsed_seconds": result.elapsed_seconds,
             "tools_requested": requested, "model_config_sha256": model_fingerprint(model)}
 
